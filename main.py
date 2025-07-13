@@ -1,20 +1,20 @@
+import asyncio
+import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext
-import datetime
-import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Konfigurasi Google Sheets
+# === Konfigurasi Google Sheets ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
 client = gspread.authorize(creds)
-
-# Buka Spreadsheet dan worksheet
 spreadsheet = client.open("cdrama_database")
 sheet_members = spreadsheet.worksheet("members")
 sheet_films = spreadsheet.worksheet("film_links")
 
+
+# === Fungsi bantu ===
 def get_user_row(user_id):
     data = sheet_members.get_all_records()
     for i, row in enumerate(data):
@@ -28,7 +28,7 @@ def add_new_user(user):
         str(user.id),
         user.username or "anonymous",
         "None",
-        "",
+        "",  # akhir masa VIP
         today,
         5
     ])
@@ -54,99 +54,102 @@ def get_film_link(code):
             return row['telegram_link']
     return None
 
-def start(update: Update, context: CallbackContext):
+
+# === Command Handler ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
         add_new_user(user)
 
-    message = f"""
-👋 Selamat datang <b>@{user.username}</b> di <b>VIP Drama Cina</b>!
+    username = user.username or "teman"
+    message = (
+        f"👋 Selamat datang @{username} di VIP Drama Cina!\n\n"
+        f"1️⃣ List Film: [DramaCina+](https://t.me/DramaCinaPlus)\n"
+        f"2️⃣ Bioskop Membership: [VIPDramaCina+](https://t.me/VIPDramaCinaBot)\n\n"
+        "Segera upgrade status-Mu untuk akses tak terbatas 🎬"
+    )
+    await update.message.reply_markdown(message)
 
-1️⃣ List Film: <a href='https://t.me/DramaCinaPlus'>DramaCina+</a>
-2️⃣ Bioskop Membership: <a href='https://t.me/VIPDramaCinaBot'>VIPDramaCina+</a>
 
-Segera upgrade status-Mu untuk akses tak terbatas 🎬
-"""
-    update.message.reply_text(message, parse_mode='HTML')
-
-def akses_gratis(update: Update, context: CallbackContext):
+async def gratis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
         add_new_user(user)
         row = get_user_row(user.id)
+
     reset_daily_quota_if_needed(row)
+
     if get_today_quota(row) <= 0:
-        update.message.reply_text("🚫 Kuota tontonan gratis kamu hari ini sudah habis.\nSilakan coba lagi besok atau daftar VIP dengan perintah /vip.")
+        await update.message.reply_text("🚫 Kuota tontonan gratis kamu hari ini sudah habis. Silakan coba lagi besok atau daftar VIP dengan /vip.")
         return
+
     if context.args:
         kode = context.args[0]
         link = get_film_link(kode)
         if link:
             reduce_quota(row)
-            update.message.reply_text(f"🎬 Ini link part gratismu hari ini:\n{link}")
+            await update.message.reply_text(f"🎬 Ini link part gratismu hari ini:\n{link}")
         else:
-            update.message.reply_text("❌ Kode film tidak ditemukan. Pastikan kamu mengetik dengan benar.")
+            await update.message.reply_text("❌ Kode film tidak ditemukan.")
     else:
-        update.message.reply_text("ℹ️ Gunakan format: /gratis <kode_film>\nContoh: /gratis ep01g")
+        await update.message.reply_text("ℹ️ Gunakan format: /gratis <kode_film>\nContoh: /gratis ep01g")
 
-def vip(update: Update, context: CallbackContext):
+
+async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or "teman"
+    message = f"Halo @{username}! Pilih jenis VIP yang kamu inginkan:"
+
     keyboard = [
-        [InlineKeyboardButton("VIP 1 Hari - Rp2.000", url="https://trakteer.id/namakamu/membership/vip-1-hari")],
-        [InlineKeyboardButton("VIP 3 Hari - Rp5.000", url="https://trakteer.id/namakamu/membership/vip-3-hari")],
-        [InlineKeyboardButton("VIP 7 Hari - Rp10.000", url="https://trakteer.id/namakamu/membership/vip-7-hari")],
-        [InlineKeyboardButton("VIP 30 Hari - Rp30.000", url="https://trakteer.id/namakamu/membership/vip-30-hari")],
-        [InlineKeyboardButton("VIP 5 Bulan - Rp150.000", url="https://trakteer.id/namakamu/membership/vip-5-bulan")]
+        [InlineKeyboardButton("VIP 1 Hari - Rp 2.000", url="https://trakteer.id/link1")],
+        [InlineKeyboardButton("VIP 3 Hari - Rp 5.000", url="https://trakteer.id/link2")],
+        [InlineKeyboardButton("VIP 7 Hari - Rp 10.000", url="https://trakteer.id/link3")],
+        [InlineKeyboardButton("VIP 30 Hari - Rp 30.000", url="https://trakteer.id/link4")],
+        [InlineKeyboardButton("VIP 5 Bulan - Rp 150.000", url="https://trakteer.id/link5")],
     ]
+
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("💎 Pilih paket VIP kamu:", reply_markup=reply_markup)
+    await update.message.reply_text(message, reply_markup=reply_markup)
 
-def status(update: Update, context: CallbackContext):
+
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    username = user.username or "teman"
     row = get_user_row(user.id)
+
     if row is None:
-        add_new_user(user)
-        row = get_user_row(user.id)
+        await update.message.reply_text("Kamu belum terdaftar.")
+        return
 
-    reset_daily_quota_if_needed(row)
-    membership = sheet_members.cell(row, 3).value or "Belum Member VIP"
-    quota = get_today_quota(row)
-    expired = sheet_members.cell(row, 4).value
+    vip_status = sheet_members.cell(row, 2).value
+    vip_expiry = sheet_members.cell(row, 4).value
+    quota = sheet_members.cell(row, 6).value
 
-    message = f"""
-👤 <b>Status Akun</b> @<b>{user.username}</b>
+    message = (
+        f"👤 @{username}, berikut status kamu:\n\n"
+        f"💎 Status VIP: {vip_status or 'Belum VIP'}\n"
+        f"🆔 Telegram ID: {user.id}\n"
+        f"🎟️ Kuota Gratis Hari Ini: {quota}\n"
+        f"📆 VIP Berakhir: {vip_expiry or '-'}\n\n"
+        f"Terima kasih telah menonton di VIP Drama Cina!"
+    )
 
-🆔 ID Telegram: <code>{user.id}</code>
-💎 Status: <b>{membership}</b>
-🎬 Sisa Kuota Hari Ini: <b>{quota}</b>
-📅 Masa Aktif Hingga: <b>{expired}</b>
+    await update.message.reply_text(message)
 
-Terima kasih telah menggunakan VIP Drama Cina!
-"""
-    update.message.reply_text(message, parse_mode='HTML')
 
-def menu(update: Update, context: CallbackContext):
-    keyboard = [
-        [KeyboardButton("Member VIP")],
-        [KeyboardButton("Lihat Status")]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    update.message.reply_text("≡ Menu dibuka.", reply_markup=reply_markup)
-
+# === MAIN ===
 def main():
-    TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = Application.builder().token("7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0").build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("gratis", akses_gratis))
-    dp.add_handler(CommandHandler("vip", vip))
-    dp.add_handler(CommandHandler("status", status))
-    dp.add_handler(CommandHandler("menu", menu))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("gratis", gratis))
+    app.add_handler(CommandHandler("vip", vip))
+    app.add_handler(CommandHandler("status", status))
 
-    updater.start_polling()
-    updater.idle()
+    print("Bot berjalan...")
+    app.run_polling()
+
 
 if __name__ == "__main__":
     main()

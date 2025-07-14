@@ -206,13 +206,20 @@ async def status(update: Update, context: CallbackContext):
     vip_expiry = sheet_members.cell(row, 4).value or "-"
     quota = sheet_members.cell(row, 6).value
     
+    # Format tanggal jika VIP
+    if vip_expiry != "-":
+        expiry_date = datetime.strptime(vip_expiry, "%Y-%m-%d")
+        formatted_expiry = expiry_date.strftime("%d-%m-%Y")
+    else:
+        formatted_expiry = "-"
+    
     status_msg = (
-        f"📌 **PROFIL PENGGUNA** @{user.username or user.id}\n\n"
-        f"🆔 ID Telegram: `{user.id}`\n"
-        f"💎 Status: {'✅ VIP' if check_vip_status(user.id) else '❌ Non-VIP'}\n"
-        f"📅 Masa Aktif: {vip_expiry}\n"
-        f"🎬 Kuota Gratis: {quota}/5\n\n"
-        "💡 Upgrade ke VIP untuk akses tak terbatas!"
+        f"📌 Status akun @{user.username or user.id}\n\n"
+        f"🆔 ID Telegram: {user.id}\n"
+        f"💎 Status: {'VIP Member' if check_vip_status(user.id) else 'Free Member'}\n"
+        f"🎬 Sisa kuota Hari Ini: {quota}/5\n"
+        f"📅 Masa Aktif Hingga: {formatted_expiry}\n\n"
+        "Terima kasih telah menggunakan VIP Drama Cina"
     )
     
     keyboard = [
@@ -223,8 +230,7 @@ async def status(update: Update, context: CallbackContext):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=status_msg,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def gratis(update: Update, context: CallbackContext):

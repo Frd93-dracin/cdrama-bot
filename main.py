@@ -191,23 +191,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await gratis(update, context)
 
 def main():
-    try:
-        application = Application.builder().token(BOT_TOKEN).build()
-        
-        # Command handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("vip", vip))
-        application.add_handler(CommandHandler("vip_episode", vip_episode))
-        application.add_handler(CommandHandler("status", status))
-        application.add_handler(CommandHandler("gratis", gratis))
-        
-        # Callback handler
-        application.add_handler(CallbackQueryHandler(button_handler))
-        
-        print("🤖 Bot VIP Drama Cina siap melayani 24/7...")
-        application.run_polling()
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("vip", vip))
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("gratis", gratis))
+    application.add_handler(CommandHandler("vip_episode", vip_episode))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    print("🤖 Bot berjalan...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
+    

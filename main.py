@@ -31,8 +31,9 @@ try:
     spreadsheet = client.open("cdrama_database")
     sheet_members = spreadsheet.worksheet("members")
     sheet_films = spreadsheet.worksheet("film_links")
+    logging.info("✅ Berhasil terhubung ke Google Sheets")
 except Exception as e:
-    print(f"❌ Gagal menginisialisasi Google Sheets: {e}")
+    logging.error(f"❌ Gagal menginisialisasi Google Sheets: {e}")
     exit()
 
 # Daftar paket VIP
@@ -68,9 +69,11 @@ def add_new_user(user):
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             5  # Kuota awal
         ])
-        logging.info(f"User added: {user.id}")
+        logging.info(f"✅ User {user.id} berhasil didaftarkan")
+        return True
     except Exception as e:
-        logging.error(f"Error adding new user: {e}")
+        logging.error(f"❌ Gagal menambahkan user {user.id}: {e}")
+        return False
 
 def reset_daily_quota_if_needed(row):
     """Reset kuota harian jika sudah lewat hari"""
@@ -81,7 +84,7 @@ def reset_daily_quota_if_needed(row):
             if last_date < datetime.now().date():
                 sheet_members.update_cell(row, 6, 5)  # Reset kuota
                 sheet_members.update_cell(row, 5, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                logging.info(f"Reset quota for row {row}")
+                logging.info(f"🔄 Kuota harian direset untuk baris {row}")
     except Exception as e:
         logging.error(f"Error resetting quota: {e}")
 
@@ -99,7 +102,7 @@ def reduce_quota(row):
         current = get_today_quota(row)
         if current > 0:
             sheet_members.update_cell(row, 6, current - 1)
-            logging.info(f"Reduced quota for row {row}")
+            logging.info(f"Kuota dikurangi untuk baris {row}")
     except Exception as e:
         logging.error(f"Error reducing quota: {e}")
 
@@ -139,7 +142,8 @@ async def start(update: Update, context: CallbackContext):
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
-        add_new_user(user)
+        if add_new_user(user):
+            row = get_user_row(user.id)
 
     keyboard = [
         [InlineKeyboardButton("🎬 List Film Drama", url="https://t.me/DramaCinaPlus")],
@@ -191,54 +195,72 @@ async def vip(update: Update, context: CallbackContext):
 async def status(update: Update, context: CallbackContext):
     """Handler untuk command /status"""
     user = update.effective_user
-    row = get_user_row(user.id)
     
+    # Daftarkan user jika belum ada
+    row = get_user_row(user.id)
     if row is None:
+        if add_new_user(user):
+            row = get_user_row(user.id)
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="⚠️ Gagal memproses status Anda. Silakan coba lagi nanti."
+            )
+            return
+    
+    try:
+        reset_daily_quota_if_needed(row)
+        
+        # Ambil data dari spreadsheet
+        vip_status = sheet_members.cell(row, 3).value
+        vip_expiry = sheet_members.cell(row, 4).value or "-"
+        quota = sheet_members.cell(row, 6).value
+        
+        # Format tanggal VIP
+        if vip_expiry != "-":
+            expiry_date = datetime.strptime(vip_expiry, "%Y-%m-%d")
+            formatted_expiry = expiry_date.strftime("%d-%m-%Y")
+        else:
+            formatted_expiry = "-"
+        
+        status_msg = (
+            f"📌 Status akun @{user.username or user.id}\n\n"
+            f"🆔 ID Telegram: {user.id}\n"
+            f"💎 Status: {'VIP Member' if check_vip_status(user.id) else 'Free Member'}\n"
+            f"🎬 Sisa kuota Hari Ini: {quota}/5\n"
+            f"📅 Masa Aktif Hingga: {formatted_expiry}\n\n"
+            "Terima kasih telah menggunakan VIP Drama Cina"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")],
+            [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu")]
+        ]
+        
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="🔍 Akun Anda belum terdaftar"
+            text=status_msg,
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        return
-    
-    reset_daily_quota_if_needed(row)
-    
-    vip_status = sheet_members.cell(row, 3).value
-    vip_expiry = sheet_members.cell(row, 4).value or "-"
-    quota = sheet_members.cell(row, 6).value
-    
-    # Format tanggal jika VIP
-    if vip_expiry != "-":
-        expiry_date = datetime.strptime(vip_expiry, "%Y-%m-%d")
-        formatted_expiry = expiry_date.strftime("%d-%m-%Y")
-    else:
-        formatted_expiry = "-"
-    
-    status_msg = (
-        f"📌 Status akun @{user.username or user.id}\n\n"
-        f"🆔 ID Telegram: {user.id}\n"
-        f"💎 Status: {'VIP Member' if check_vip_status(user.id) else 'Free Member'}\n"
-        f"🎬 Sisa kuota Hari Ini: {quota}/5\n"
-        f"📅 Masa Aktif Hingga: {formatted_expiry}\n\n"
-        "Terima kasih telah menggunakan VIP Drama Cina"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")],
-        [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu")]
-    ]
-    
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=status_msg,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        
+    except Exception as e:
+        logging.error(f"Error in status command: {e}")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="⚠️ Terjadi kesalahan saat memproses status Anda. Silakan coba lagi nanti."
+        )
 
 async def gratis(update: Update, context: CallbackContext):
     """Handler untuk command /gratis"""
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
-        add_new_user(user)
+        if not add_new_user(user):
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="⚠️ Gagal memproses permintaan Anda. Silakan coba lagi nanti."
+            )
+            return
         row = get_user_row(user.id)
 
     reset_daily_quota_if_needed(row)

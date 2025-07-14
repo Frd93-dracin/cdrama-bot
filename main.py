@@ -233,7 +233,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === Main Application ===
 def main():
-    application = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
+    application = Application.builder().token(os.environ["7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"]).build()
     
     # Command handlers
     application.add_handler(CommandHandler("start", start))

@@ -9,10 +9,11 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
-    filters
+    filters,
+    CallbackQueryHandler
 )
 
-# === Konfigurasi Google Sheets === (nama variabel dipertahankan)
+# === Konfigurasi Google Sheets ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 service_account_info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
@@ -21,16 +22,15 @@ spreadsheet = client.open("cdrama_database")
 sheet_members = spreadsheet.worksheet("members")
 sheet_films = spreadsheet.worksheet("film_links")
 
-# Daftar paket VIP dengan tampilan lebih menarik
+# Daftar paket VIP
 VIP_PACKAGES = [
     {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/vip1hari"},
-    {"label": "🔥 3 Hari - Rp5.000 (Hemat 17%)", "days": 3, "price": 5000, "url": "https://trakteer.id/vip3hari"},
-    {"label": "💎 7 Hari - Rp10.000 (Hemat 29%)", "days": 7, "price": 10000, "url": "https://trakteer.id/vip7hari"},
-    {"label": "🌟 30 Hari - Rp30.000 (Hemat 50%)", "days": 30, "price": 30000, "url": "https://trakteer.id/vip30hari"},
-    {"label": "👑 5 Bulan - Rp150.000 (Hemat 67%)", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
+    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vip3hari"},
+    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vip7hari"},
+    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vip30hari"},
+    {"label": "👑 5 Bulan - Rp150.000", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
 ]
 
-# === Fungsi Bantuan === (nama fungsi dipertahankan)
 def get_user_row(user_id):
     data = sheet_members.get_all_records()
     for i, row in enumerate(data):
@@ -78,16 +78,14 @@ def check_vip_status(user_id):
             return datetime.now() <= datetime.strptime(vip_expiry, "%Y-%m-%d")
     return False
 
-# === Command Handlers === (tampilan diubah lebih menarik)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
         add_new_user(user)
 
-    # Tampilan menu utama yang lebih menarik
     keyboard = [
-        [InlineKeyboardButton("📺 List Film Drama", url="https://t.me/DramaCinaPlus")],
+        [InlineKeyboardButton("🎬 List Film Drama", url="https://t.me/DramaCinaPlus")],
         [InlineKeyboardButton("💎 Langganan VIP", callback_data="vip")],
         [InlineKeyboardButton("📊 Status Akun", callback_data="status")]
     ]
@@ -105,7 +103,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_msg, reply_markup=reply_markup)
 
 async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Tampilan paket VIP yang lebih menarik
     keyboard = []
     for package in VIP_PACKAGES:
         keyboard.append([InlineKeyboardButton(package["label"], url=package["url"])])
@@ -119,8 +116,6 @@ async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ Nonton sepuasnya tanpa batas\n"
         "✅ Kualitas HD terbaik\n"
         "✅ Update episode terbaru\n\n"
-        "📢 **Promo Spesial:**\n"
-        "Semakin lama berlangganan, semakin hemat!\n\n"
         "⬇️ Pilih paket favoritmu:"
     )
     
@@ -140,7 +135,6 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_expiry = sheet_members.cell(row, 4).value or "-"
     quota = sheet_members.cell(row, 6).value
     
-    # Tampilan status yang lebih informatif
     status_msg = (
         f"📌 **PROFIL PENGGUNA** @{user.username or user.id}\n\n"
         f"🆔 ID Telegram: `{user.id}`\n"
@@ -197,7 +191,7 @@ async def gratis(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def vip_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not context.args:
-        await update.message.reply_text("ℹ️ Cara pakai: /vip <kode_film>")
+        await update.message.reply_text("ℹ️ Cara pakai: /vip_episode <kode_film>")
         return
 
     film_link = get_film_link(context.args[0], is_vip=True)
@@ -231,19 +225,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [query.data.split("_")[1]]
         await gratis(update, context)
 
-# === Main Application ===
 def main():
-    application = Application.builder().token(os.environ["7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"]).build()
+    application = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
     
     # Command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("vip", vip))
+    application.add_handler(CommandHandler("vip_episode", vip_episode))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CommandHandler("gratis", gratis))
-    application.add_handler(CommandHandler("vip", vip_episode))
     
-    # Button callback handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+    # Callback query handler
+    application.add_handler(CallbackQueryHandler(button_handler))
     
     print("🤖 Bot VIP Drama Cina siap melayani 24/7...")
     application.run_polling()

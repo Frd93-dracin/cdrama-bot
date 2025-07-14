@@ -228,6 +228,35 @@ async def start(update: Update, context: CallbackContext):
         logger.error(f"Error in start: {e}")
         await send_error_message(update, context)
 
+async def vip(update: Update, context: CallbackContext):
+    """Handler untuk command /vip"""
+    try:
+        keyboard = []
+        for package in VIP_PACKAGES:
+            keyboard.append([InlineKeyboardButton(package["label"], url=package["url"])])
+        keyboard.append([InlineKeyboardButton("🔙 Kembali ke Menu", callback_data="menu")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        vip_msg = (
+            "💎 **PAKET LANGGANAN VIP** 💎\n\n"
+            "Dapatkan akses unlimited ke semua drama:\n"
+            "✅ Nonton sepuasnya tanpa batas\n"
+            "✅ Kualitas HD terbaik\n"
+            "✅ Update episode terbaru setiap harinya\n\n"
+            "⬇️ Pilih paket favoritmu:"
+        )
+        
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=vip_msg,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Error in vip: {e}")
+        await send_error_message(update, context)
+
 async def status(update: Update, context: CallbackContext):
     """Handler untuk command /status"""
     try:
@@ -296,23 +325,135 @@ async def status(update: Update, context: CallbackContext):
         logger.error(f"Error in status: {e}")
         await send_error_message(update, context)
 
+async def gratis(update: Update, context: CallbackContext):
+    """Handler untuk command /gratis"""
+    try:
+        user = update.effective_user
+        row = get_user_row(user.id)
+        if row is None:
+            if not add_new_user(user):
+                raise Exception("Gagal mendaftarkan user baru")
+            row = get_user_row(user.id)
+
+        reset_daily_quota_if_needed(row)
+
+        if get_today_quota(row) <= 0:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="😢 Kuota gratis hari ini sudah habis!\n\n"
+                     "Anda bisa menonton lagi besok atau upgrade ke VIP untuk akses tak terbatas.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")]
+                ])
+            )
+            return
+
+        if not context.args:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="ℹ️ Cara pakai: /gratis <kode_film>"
+            )
+            return
+
+        film_link = get_film_link(context.args[0])
+        if film_link:
+            reduce_quota(row)
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"🎬 Berikut tontonan gratis Anda:\n{film_link}\n\n"
+                     f"Sisa kuota hari ini: {get_today_quota(row)}/5"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Kode film tidak ditemukan"
+            )
+    except Exception as e:
+        logger.error(f"Error in gratis: {e}")
+        await send_error_message(update, context)
+
+async def vip_episode(update: Update, context: CallbackContext):
+    """Handler untuk command /vip_episode"""
+    try:
+        user = update.effective_user
+        if not context.args:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="ℹ️ Cara pakai: /vip_episode <kode_film>"
+            )
+            return
+
+        film_link = get_film_link(context.args[0], is_vip=True)
+        if not film_link:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Kode film tidak ditemukan"
+            )
+            return
+
+        if check_vip_status(user.id):
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"💎 VIP Access:\n{film_link}"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔒 Akses terbatas untuk member VIP!\n\n"
+                     "Yuk upgrade ke VIP untuk nonton sepuasnya. Cuma Rp2.000 untuk 1 hari!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💎 Upgrade Sekarang", callback_data="vip")],
+                    [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}")]
+                ])
+            )
+    except Exception as e:
+        logger.error(f"Error in vip_episode: {e}")
+        await send_error_message(update, context)
+
+async def button_handler(update: Update, context: CallbackContext):
+    """Handler untuk callback query dari inline keyboard"""
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        if query.data == "menu":
+            await start(update, context)
+        elif query.data == "vip":
+            await vip(update, context)
+        elif query.data == "status":
+            await status(update, context)
+        elif query.data.startswith("free_"):
+            context.args = [query.data.split("_")[1]]
+            await gratis(update, context)
+    except Exception as e:
+        logger.error(f"Error in button_handler: {e}")
+        await send_error_message(update, context)
+
+async def handle_message(update: Update, context: CallbackContext):
+    """Handler untuk pesan teks biasa"""
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="ℹ️ Gunakan command yang tersedia. Ketik /start untuk melihat menu."
+        )
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
+
 async def send_error_message(update: Update, context: CallbackContext):
     """Mengirim pesan error standar"""
-    error_msg = (
-        "⚠️ Maaf, terjadi gangguan teknis\n\n"
-        "Tim kami sudah menerima laporan ini. "
-        "Silakan coba beberapa saat lagi atau hubungi admin jika masalah berlanjut."
-    )
-    
     try:
+        error_msg = (
+            "⚠️ Maaf, terjadi gangguan teknis\n\n"
+            "Tim kami sudah menerima laporan ini. "
+            "Silakan coba beberapa saat lagi atau hubungi admin jika masalah berlanjut."
+        )
+        
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=error_msg
         )
     except Exception as e:
         logger.error(f"Gagal mengirim pesan error: {e}")
-
-# [Fungsi lainnya seperti vip, gratis, vip_episode, button_handler tetap sama seperti sebelumnya]
 
 def main():
     """Fungsi utama untuk menjalankan bot"""

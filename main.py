@@ -13,20 +13,14 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 
-# ===== KONFIGURASI BOT =====
-# Ganti dengan token bot Anda di sini
-BOT_TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"
+# ===== KONFIGURASI =====
+BOT_TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"  # Ganti dengan token bot Anda
 
-# ===== KONFIGURASI GOOGLE SHEETS =====
-# Tetap menggunakan environment variable untuk Google Sheets
-GOOGLE_SERVICE_ACCOUNT = os.getenv('GOOGLE_SERVICE_ACCOUNT')
-if not GOOGLE_SERVICE_ACCOUNT:
-    raise ValueError("Google Service Account credentials tidak ditemukan!")
-
+# Google Sheets Config
 try:
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        json.loads(GOOGLE_SERVICE_ACCOUNT), 
+        json.loads(os.getenv('GOOGLE_SERVICE_ACCOUNT')), 
         scope
     )
     client = gspread.authorize(creds)
@@ -34,7 +28,7 @@ try:
     sheet_members = spreadsheet.worksheet("members")
     sheet_films = spreadsheet.worksheet("film_links")
 except Exception as e:
-    print(f"❌ Gagal terhubung ke Google Sheets: {e}")
+    print(f"❌ Gagal menginisialisasi Google Sheets: {e}")
     exit()
 
 # Daftar paket VIP

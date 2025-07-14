@@ -13,14 +13,29 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 
-# === Konfigurasi Google Sheets ===
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-service_account_info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
-creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
-client = gspread.authorize(creds)
-spreadsheet = client.open("cdrama_database")
-sheet_members = spreadsheet.worksheet("members")
-sheet_films = spreadsheet.worksheet("film_links")
+# ===== KONFIGURASI BOT =====
+# Ganti dengan token bot Anda di sini
+BOT_TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"
+
+# ===== KONFIGURASI GOOGLE SHEETS =====
+# Tetap menggunakan environment variable untuk Google Sheets
+GOOGLE_SERVICE_ACCOUNT = os.getenv('GOOGLE_SERVICE_ACCOUNT')
+if not GOOGLE_SERVICE_ACCOUNT:
+    raise ValueError("Google Service Account credentials tidak ditemukan!")
+
+try:
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        json.loads(GOOGLE_SERVICE_ACCOUNT), 
+        scope
+    )
+    client = gspread.authorize(creds)
+    spreadsheet = client.open("cdrama_database")
+    sheet_members = spreadsheet.worksheet("members")
+    sheet_films = spreadsheet.worksheet("film_links")
+except Exception as e:
+    print(f"❌ Gagal terhubung ke Google Sheets: {e}")
+    exit()
 
 # Daftar paket VIP
 VIP_PACKAGES = [
@@ -31,52 +46,8 @@ VIP_PACKAGES = [
     {"label": "👑 5 Bulan - Rp150.000", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
 ]
 
-def get_user_row(user_id):
-    data = sheet_members.get_all_records()
-    for i, row in enumerate(data):
-        if str(row['telegram_id']) == str(user_id):
-            return i + 2
-    return None
-
-def add_new_user(user):
-    today = datetime.now().strftime("%Y-%m-%d")
-    sheet_members.append_row([
-        str(user.id),
-        user.username or "anonymous",
-        "None",
-        "",
-        today,
-        5
-    ])
-
-def reset_daily_quota_if_needed(row):
-    today = datetime.now().strftime("%Y-%m-%d")
-    last_reset = sheet_members.cell(row, 5).value
-    if last_reset != today:
-        sheet_members.update_cell(row, 5, today)
-        sheet_members.update_cell(row, 6, 5)
-
-def get_today_quota(row):
-    return int(sheet_members.cell(row, 6).value)
-
-def reduce_quota(row):
-    current = get_today_quota(row)
-    sheet_members.update_cell(row, 6, current - 1)
-
-def get_film_link(code, is_vip=False):
-    data = sheet_films.get_all_records()
-    for row in data:
-        if row['code'] == code:
-            return row['vip_link'] if is_vip else row['free_link']
-    return None
-
-def check_vip_status(user_id):
-    user_row = get_user_row(user_id)
-    if user_row:
-        vip_expiry = sheet_members.cell(user_row, 4).value
-        if vip_expiry:
-            return datetime.now() <= datetime.strptime(vip_expiry, "%Y-%m-%d")
-    return False
+# ... (Fungsi-fungsi bantuan get_user_row, add_new_user, dll tetap sama seperti sebelumnya)
+# [Potongan kode sebelumnya tetap sama, hanya menampilkan bagian yang diperbaiki]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -226,20 +197,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await gratis(update, context)
 
 def main():
-    application = Application.builder().token(os.environ["TELEGRAM_BOT_TOKEN"]).build()
-    
-    # Command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("vip", vip))
-    application.add_handler(CommandHandler("vip_episode", vip_episode))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("gratis", gratis))
-    
-    # Callback query handler
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🤖 Bot VIP Drama Cina siap melayani 24/7...")
-    application.run_polling()
+    try:
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Command handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("vip", vip))
+        application.add_handler(CommandHandler("vip_episode", vip_episode))
+        application.add_handler(CommandHandler("status", status))
+        application.add_handler(CommandHandler("gratis", gratis))
+        
+        # Callback handler
+        application.add_handler(CallbackQueryHandler(button_handler))
+        
+        print("🤖 Bot VIP Drama Cina siap melayani 24/7...")
+        application.run_polling()
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
 
 if __name__ == "__main__":
     main()

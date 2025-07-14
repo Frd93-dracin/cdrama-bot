@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: cdrama-bot
-    env: python
-    plan: free
-    buildCommand: ""
-    startCommand: python main.py
-    runtime: python
-    pythonVersion: 3.10.13

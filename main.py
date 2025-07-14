@@ -190,19 +190,47 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [query.data.split("_")[1]]
         await gratis(update, context)
 
+import logging
+from telegram.error import Conflict
+
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 def main():
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("vip", vip))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("gratis", gratis))
-    application.add_handler(CommandHandler("vip_episode", vip_episode))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    print("🤖 Bot berjalan...")
-    application.run_polling()
+    try:
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Register handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("vip", vip))
+        application.add_handler(CommandHandler("status", status))
+        application.add_handler(CommandHandler("gratis", gratis))
+        application.add_handler(CommandHandler("vip_episode", vip_episode))
+        application.add_handler(CallbackQueryHandler(button_handler))
+        
+        logger.info("🤖 Bot starting...")
+        
+        # Hapus pending updates sebelum mulai
+        application.updater.start_polling(drop_pending_updates=True)
+        
+        # Jalankan bot sampai mendapat SIGINT, SIGTERM atau SIGABRT
+        application.run_polling()
+        
+    except Conflict as e:
+        logger.error(f"⚠️ Bot conflict detected: {e}")
+        logger.info("🔄 Trying to restart bot after conflict...")
+        # Tunggu sebentar sebelum restart
+        time.sleep(5)
+        main()  # Restart bot
+        
+    except Exception as e:
+        logger.error(f"❌ Fatal error: {e}")
+        raise
 
 if __name__ == "__main__":
+    import time
     main()
-    

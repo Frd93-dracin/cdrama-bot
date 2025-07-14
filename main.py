@@ -1,7 +1,10 @@
 import os
 import json
 import gspread
+import time
+import logging
 from datetime import datetime, timedelta
+from telegram.error import Conflict
 from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,11 +13,12 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    CallbackQueryHandler
+    CallbackQueryHandler,
+    CallbackContext
 )
 
 # ===== KONFIGURASI =====
-BOT_TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"  # Ganti dengan token bot Anda
+BOT_TOKEN = "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0"
 
 # Google Sheets Config
 try:
@@ -37,13 +41,101 @@ VIP_PACKAGES = [
     {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vip3hari"},
     {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vip7hari"},
     {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vip30hari"},
-    {"label": "👑 5 Bulan - Rp150.000", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
+    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
 ]
 
-# ... (Fungsi-fungsi bantuan get_user_row, add_new_user, dll tetap sama seperti sebelumnya)
-# [Potongan kode sebelumnya tetap sama, hanya menampilkan bagian yang diperbaiki]
+# ===== FUNGSI BANTUAN =====
+def get_user_row(user_id):
+    """Mendapatkan baris user di spreadsheet berdasarkan ID Telegram"""
+    try:
+        records = sheet_members.get_all_records()
+        for idx, record in enumerate(records, start=2):
+            if record.get('telegram_id') == str(user_id):
+                return idx
+        return None
+    except Exception as e:
+        logging.error(f"Error getting user row: {e}")
+        return None
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def add_new_user(user):
+    """Menambahkan user baru ke spreadsheet"""
+    try:
+        sheet_members.append_row([
+            str(user.id),
+            user.username or "",
+            "non-vip",
+            "",
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            5  # Kuota awal
+        ])
+        logging.info(f"User added: {user.id}")
+    except Exception as e:
+        logging.error(f"Error adding new user: {e}")
+
+def reset_daily_quota_if_needed(row):
+    """Reset kuota harian jika sudah lewat hari"""
+    try:
+        last_updated = sheet_members.cell(row, 5).value
+        if last_updated:
+            last_date = datetime.strptime(last_updated, "%Y-%m-%d %H:%M:%S").date()
+            if last_date < datetime.now().date():
+                sheet_members.update_cell(row, 6, 5)  # Reset kuota
+                sheet_members.update_cell(row, 5, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                logging.info(f"Reset quota for row {row}")
+    except Exception as e:
+        logging.error(f"Error resetting quota: {e}")
+
+def get_today_quota(row):
+    """Mendapatkan kuota harian user"""
+    try:
+        return int(sheet_members.cell(row, 6).value)
+    except Exception as e:
+        logging.error(f"Error getting quota: {e}")
+        return 0
+
+def reduce_quota(row):
+    """Mengurangi kuota user"""
+    try:
+        current = get_today_quota(row)
+        if current > 0:
+            sheet_members.update_cell(row, 6, current - 1)
+            logging.info(f"Reduced quota for row {row}")
+    except Exception as e:
+        logging.error(f"Error reducing quota: {e}")
+
+def get_film_link(film_code, is_vip=False):
+    """Mendapatkan link film berdasarkan kode"""
+    try:
+        records = sheet_films.get_all_records()
+        for record in records:
+            if record.get('code') == film_code:
+                return record.get('vip_link' if is_vip else 'free_link')
+        return None
+    except Exception as e:
+        logging.error(f"Error getting film link: {e}")
+        return None
+
+def check_vip_status(user_id):
+    """Memeriksa status VIP user"""
+    try:
+        row = get_user_row(user_id)
+        if not row:
+            return False
+            
+        vip_status = sheet_members.cell(row, 3).value
+        vip_expiry = sheet_members.cell(row, 4).value
+        
+        if vip_status == "vip" and vip_expiry:
+            expiry_date = datetime.strptime(vip_expiry, "%Y-%m-%d")
+            return expiry_date >= datetime.now()
+        return False
+    except Exception as e:
+        logging.error(f"Error checking VIP status: {e}")
+        return False
+
+# ===== HANDLER COMMAND =====
+async def start(update: Update, context: CallbackContext):
+    """Handler untuk command /start"""
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
@@ -65,9 +157,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Silakan pilih menu di bawah:"
     )
     
-    await update.message.reply_text(welcome_msg, reply_markup=reply_markup)
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=welcome_msg,
+        reply_markup=reply_markup
+    )
 
-async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def vip(update: Update, context: CallbackContext):
+    """Handler untuk command /vip"""
     keyboard = []
     for package in VIP_PACKAGES:
         keyboard.append([InlineKeyboardButton(package["label"], url=package["url"])])
@@ -80,18 +177,27 @@ async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Dapatkan akses unlimited ke semua drama:\n"
         "✅ Nonton sepuasnya tanpa batas\n"
         "✅ Kualitas HD terbaik\n"
-        "✅ Update episode terbaru\n\n"
+        "✅ Update episode terbaru setiap harinya\n\n"
         "⬇️ Pilih paket favoritmu:"
     )
     
-    await update.message.reply_text(vip_msg, reply_markup=reply_markup, parse_mode="Markdown")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=vip_msg,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def status(update: Update, context: CallbackContext):
+    """Handler untuk command /status"""
     user = update.effective_user
     row = get_user_row(user.id)
     
     if row is None:
-        await update.message.reply_text("🔍 Akun Anda belum terdaftar")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🔍 Akun Anda belum terdaftar"
+        )
         return
     
     reset_daily_quota_if_needed(row)
@@ -114,13 +220,15 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏠 Menu Utama", callback_data="menu")]
     ]
     
-    await update.message.reply_text(
-        status_msg,
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=status_msg,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
 
-async def gratis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def gratis(update: Update, context: CallbackContext):
+    """Handler untuk command /gratis"""
     user = update.effective_user
     row = get_user_row(user.id)
     if row is None:
@@ -130,9 +238,10 @@ async def gratis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reset_daily_quota_if_needed(row)
 
     if get_today_quota(row) <= 0:
-        await update.message.reply_text(
-            "😢 Kuota gratis hari ini sudah habis!\n\n"
-            "Anda bisa menonton lagi besok atau upgrade ke VIP untuk akses tak terbatas.",
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="😢 Kuota gratis hari ini sudah habis!\n\n"
+                 "Anda bisa menonton lagi besok atau upgrade ke VIP untuk akses tak terbatas.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")]
             ])
@@ -140,43 +249,62 @@ async def gratis(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("ℹ️ Cara pakai: /gratis <kode_film>")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="ℹ️ Cara pakai: /gratis <kode_film>"
+        )
         return
 
     film_link = get_film_link(context.args[0])
     if film_link:
         reduce_quota(row)
-        await update.message.reply_text(
-            f"🎬 Berikut tontonan gratis Anda:\n{film_link}\n\n"
-            f"Sisa kuota hari ini: {get_today_quota(row)}/5"
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"🎬 Berikut tontonan gratis Anda:\n{film_link}\n\n"
+                 f"Sisa kuota hari ini: {get_today_quota(row)}/5"
         )
     else:
-        await update.message.reply_text("❌ Kode film tidak ditemukan")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Kode film tidak ditemukan"
+        )
 
-async def vip_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def vip_episode(update: Update, context: CallbackContext):
+    """Handler untuk command /vip_episode"""
     user = update.effective_user
     if not context.args:
-        await update.message.reply_text("ℹ️ Cara pakai: /vip_episode <kode_film>")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="ℹ️ Cara pakai: /vip_episode <kode_film>"
+        )
         return
 
     film_link = get_film_link(context.args[0], is_vip=True)
     if not film_link:
-        await update.message.reply_text("❌ Kode film tidak ditemukan")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ Kode film tidak ditemukan"
+        )
         return
 
     if check_vip_status(user.id):
-        await update.message.reply_text(f"💎 VIP Access:\n{film_link}")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"💎 VIP Access:\n{film_link}"
+        )
     else:
-        await update.message.reply_text(
-            "🔒 Akses terbatas untuk member VIP!\n\n"
-            "Yuk upgrade ke VIP untuk nonton sepuasnya. Cuma Rp2.000 untuk 1 hari!",
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🔒 Akses terbatas untuk member VIP!\n\n"
+                 "Yuk upgrade ke VIP untuk nonton sepuasnya. Cuma Rp2.000 untuk 1 hari!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("💎 Upgrade Sekarang", callback_data="vip")],
                 [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}")]
             ])
         )
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(update: Update, context: CallbackContext):
+    """Handler untuk callback query dari inline keyboard"""
     query = update.callback_query
     await query.answer()
     
@@ -190,18 +318,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.args = [query.data.split("_")[1]]
         await gratis(update, context)
 
-import logging
-from telegram.error import Conflict
-
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+async def handle_message(update: Update, context: CallbackContext):
+    """Handler untuk pesan teks biasa"""
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="ℹ️ Gunakan command yang tersedia. Ketik /start untuk melihat menu."
+    )
 
 def main():
+    """Fungsi utama untuk menjalankan bot"""
     try:
+        # Setup logging
+        logging.basicConfig(
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            level=logging.INFO
+        )
+        logger = logging.getLogger(__name__)
+        
         application = Application.builder().token(BOT_TOKEN).build()
         
         # Register handlers
@@ -211,26 +344,18 @@ def main():
         application.add_handler(CommandHandler("gratis", gratis))
         application.add_handler(CommandHandler("vip_episode", vip_episode))
         application.add_handler(CallbackQueryHandler(button_handler))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         logger.info("🤖 Bot starting...")
-        
-        # Hapus pending updates sebelum mulai
-        application.updater.start_polling(drop_pending_updates=True)
-        
-        # Jalankan bot sampai mendapat SIGINT, SIGTERM atau SIGABRT
-        application.run_polling()
+        application.run_polling(drop_pending_updates=True)
         
     except Conflict as e:
         logger.error(f"⚠️ Bot conflict detected: {e}")
-        logger.info("🔄 Trying to restart bot after conflict...")
-        # Tunggu sebentar sebelum restart
         time.sleep(5)
-        main()  # Restart bot
-        
+        main()
     except Exception as e:
         logger.error(f"❌ Fatal error: {e}")
         raise
 
 if __name__ == "__main__":
-    import time
     main()

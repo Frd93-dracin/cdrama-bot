@@ -7,7 +7,9 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 # === Konfigurasi Google Sheets ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+import json, os
+service_account_info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
 client = gspread.authorize(creds)
 spreadsheet = client.open("cdrama_database")
 sheet_members = spreadsheet.worksheet("members")

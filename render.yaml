@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: cdrama-bot
+    env: python
+    runtime: python
+    pythonVersion: "3.10"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        value: your_bot_token_here
+      - key: GOOGLE_SERVICE_ACCOUNT
+        value: your_google_service_account_json
+      - key: WEBHOOK_URL
+        value: https://your-render-app-name.onrender.com
+      - key: PORT
+        value: 8443

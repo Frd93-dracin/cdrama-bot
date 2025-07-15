@@ -19,7 +19,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
 PORT = int(os.getenv('PORT', 8443))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://your-app-name.onrender.com") + '/' + BOT_TOKEN
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
 
 # Setup logging
 logging.basicConfig(

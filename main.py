@@ -19,7 +19,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
 PORT = int(os.getenv('PORT', 8443))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/webhook'  # Changed to use /webhook endpoint
 
 # Setup logging
 logging.basicConfig(
@@ -171,14 +171,23 @@ async def start(update: Update, context: CallbackContext):
             [InlineKeyboardButton("📊 Status Akun", callback_data="status")]
         ]
         
-        await update.message.reply_text(
+        reply_text = (
             f"🎉 Selamat datang di VIP Drama Cina, {user.username or 'Sobat'}! 🎉\n\n"
             "Nikmati koleksi drama Cina terbaik dengan kualitas HD:\n"
             "✨ 5 tontonan gratis setiap hari\n"
             "💎 Akses tak terbatas untuk member VIP\n\n"
-            "Silakan pilih menu di bawah:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "Silakan pilih menu di bawah:"
         )
+        
+        if update.message:
+            await update.message.reply_text(
+                reply_text,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+        else:
+            await update.callback_query.message.edit_text(
+                reply_text,
+                reply_markup=InlineKeyboardMarkup(keyboard))
+            
     except Exception as e:
         logger.error(f"Error in start: {e}")
         await send_error_message(update, context)

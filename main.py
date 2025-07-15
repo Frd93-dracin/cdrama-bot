@@ -263,7 +263,7 @@ async def status(update: Update, context: CallbackContext):
         if update.message:
             await update.message.reply_text(
                 status_msg,
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard))
         else:
             await update.callback_query.message.edit_text(
                 status_msg,

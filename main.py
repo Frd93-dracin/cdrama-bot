@@ -285,22 +285,37 @@ async def generate_film_links(update: Update, context: CallbackContext):
         f"▫️ [Part 2 ({'VIP' if film_data['is_part2_vip'] else 'Free'})]({part2_link})"
     )
 
+# ... (semua import dan konfigurasi awal tetap sama)
+
+async def post_init(application: Application) -> None:
+    """Initialize webhook after startup"""
+    try:
+        await application.bot.delete_webhook()
+        await application.bot.set_webhook(
+            url=WEBHOOK_URL,
+            max_connections=40
+        )
+        logger.info(f"✅ Webhook successfully set to: {WEBHOOK_URL}")
+    except Exception as e:
+        logger.error(f"❌ Failed to set webhook: {e}")
+        raise
+
 def main() -> None:
     """Run the bot with webhook"""
     try:
         # Create Application
         application = Application.builder() \
             .token(BOT_TOKEN) \
-            .post_init(post_init) \
+            .post_init(post_init) \  # Pastikan ini merujuk ke fungsi yang sudah didefinisikan
             .build()
 
-        # Register ALL handlers (original + new)
+        # Register handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("vip", vip))
         application.add_handler(CommandHandler("status", status))
         application.add_handler(CommandHandler("free", gratis))
         application.add_handler(CommandHandler("vip_episode", vip_episode))
-        application.add_handler(CommandHandler("generate_link", generate_film_links))  # NEW
+        application.add_handler(CommandHandler("generate_link", generate_film_links))
         application.add_handler(CallbackQueryHandler(button_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 

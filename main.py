@@ -2,8 +2,8 @@ import os
 import json
 import gspread
 import logging
-import base64
 import time
+import base64
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -19,7 +19,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # ===== CONFIGURATION =====
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
-BOT_USERNAME = "VIPDramaCinaBot"  # HARUS SAMA DENGAN USERNAME BOT ANDA
+BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "@DramaCinaArchive"  # Channel private untuk video
 PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
@@ -31,7 +31,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Google Sheets
+# Initialize Google Sheets connection
 try:
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
@@ -251,13 +251,8 @@ async def start(update: Update, context: CallbackContext):
         logger.error(f"Error in start: {e}")
         await send_error_message(update, context)
 
-# ... (ALL YOUR ORIGINAL HANDLERS REMAIN UNCHANGED BELOW THIS POINT)
-# [Include ALL other original functions: vip(), status(), gratis(), vip_episode(), 
-# button_handler(), handle_message(), send_error_message(), post_init() exactly as they were]
-
-# ===== NEW ADMIN COMMAND =====
 async def generate_film_links(update: Update, context: CallbackContext):
-    """Generate film links (NEW)"""
+    """Admin command to generate film links (NEW)"""
     if str(update.effective_user.id) != "YOUR_ADMIN_ID":  # Ganti dengan ID Telegram admin
         return
 
@@ -285,7 +280,9 @@ async def generate_film_links(update: Update, context: CallbackContext):
         f"▫️ [Part 2 ({'VIP' if film_data['is_part2_vip'] else 'Free'})]({part2_link})"
     )
 
-# ... (semua import dan konfigurasi awal tetap sama)
+# [ALL YOUR ORIGINAL HANDLERS REMAIN EXACTLY THE SAME HERE]
+# vip(), status(), gratis(), vip_episode(), button_handler(), 
+# handle_message(), send_error_message() - TIDAK ADA PERUBAHAN
 
 async def post_init(application: Application) -> None:
     """Initialize webhook after startup"""
@@ -306,16 +303,16 @@ def main() -> None:
         # Create Application
         application = Application.builder() \
             .token(BOT_TOKEN) \
-            .post_init(post_init) \  # Pastikan ini merujuk ke fungsi yang sudah didefinisikan
+            .post_init(post_init) \
             .build()
 
-        # Register handlers
+        # Register ALL handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("vip", vip))
         application.add_handler(CommandHandler("status", status))
         application.add_handler(CommandHandler("free", gratis))
         application.add_handler(CommandHandler("vip_episode", vip_episode))
-        application.add_handler(CommandHandler("generate_link", generate_film_links))
+        application.add_handler(CommandHandler("generate_link", generate_film_links))  # NEW
         application.add_handler(CallbackQueryHandler(button_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 

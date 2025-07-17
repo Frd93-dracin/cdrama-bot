@@ -166,7 +166,7 @@ def get_film_info(film_code):
     return safe_sheets_operation(operation)
 
 def encode_film_code(film_code, part):
-    """Encode film code for URLs (e.g., DR001_P1 -> base64)"""
+    """Encode film code for URLs"""
     return base64.urlsafe_b64encode(f"{film_code}_{part}".encode()).decode()
 
 def decode_film_code(encoded_str):
@@ -251,8 +251,207 @@ async def start(update: Update, context: CallbackContext):
         logger.error(f"Error in start: {e}")
         await send_error_message(update, context)
 
+async def vip(update: Update, context: CallbackContext):
+    try:
+        keyboard = []
+        for package in VIP_PACKAGES:
+            keyboard.append([InlineKeyboardButton(package["label"], url=package["url"])])
+        keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="menu")])
+        
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="💎 **VIP SUBSCRIPTION PACKAGES** 💎\n\n"
+                 "Get unlimited access to all dramas:\n"
+                 "✅ Watch as much as you want\n"
+                 "✅ Best HD quality\n"
+                 "✅ Daily episode updates\n\n"
+                 "⬇️ Choose your favorite package:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Error in vip: {e}")
+        await send_error_message(update, context)
+
+async def status(update: Update, context: CallbackContext):
+    try:
+        user = update.effective_user
+        row = get_user_row(user.id)
+        if row is None:
+            if not add_new_user(user):
+                raise Exception("Failed to register new user")
+            row = get_user_row(user.id)
+
+        reset_daily_quota_if_needed(row)
+
+        vip_status = sheet_members.cell(row, 3).value or "non-vip"
+        vip_expiry = sheet_members.cell(row, 4).value or "-"
+        quota = sheet_members.cell(row, 6).value or "0"
+
+        is_vip = vip_status.lower() == "vip" and (
+            vip_expiry == "-" or 
+            datetime.strptime(vip_expiry, "%Y-%m-%d") >= datetime.now()
+        )
+
+        if vip_expiry != "-":
+            try:
+                expiry_date = datetime.strptime(vip_expiry, "%Y-%m-%d")
+                formatted_expiry = expiry_date.strftime("%d-%m-%Y")
+            except:
+                formatted_expiry = vip_expiry
+        else:
+            formatted_expiry = "-"
+
+        status_msg = (
+            f"📌 Account status @{user.username or user.id}\n\n"
+            f"🆔 Telegram ID: {user.id}\n"
+            f"💎 Status: {'VIP Member' if is_vip else 'Free Member'}\n"
+            f"🎬 Today's remaining quota: {quota}/5\n"
+            f"📅 Active until: {formatted_expiry}\n\n"
+            "Thank you for using VIP Drama Cina"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu")]
+        ]
+        
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=status_msg,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        logger.error(f"Error in status: {e}")
+        await send_error_message(update, context)
+
+async def gratis(update: Update, context: CallbackContext):
+    try:
+        user = update.effective_user
+        row = get_user_row(user.id)
+        if row is None:
+            if not add_new_user(user):
+                raise Exception("Failed to register new user")
+            row = get_user_row(user.id)
+
+        reset_daily_quota_if_needed(row)
+
+        if get_today_quota(row) <= 0:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="😢 Today's free quota has run out!\n\n"
+                     "You can watch again tomorrow or upgrade to VIP for unlimited access.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")]
+                ])
+            )
+            return
+
+        if not context.args:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="ℹ️ Usage: /free <drama_code>"
+            )
+            return
+
+        film_link = get_film_link(context.args[0])
+        if film_link:
+            reduce_quota(row)
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"🎬 Here's your free content:\n{film_link}\n\n"
+                     f"Remaining quota today: {get_today_quota(row)}/5"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Drama code not found"
+            )
+    except Exception as e:
+        logger.error(f"Error in free: {e}")
+        await send_error_message(update, context)
+
+async def vip_episode(update: Update, context: CallbackContext):
+    try:
+        user = update.effective_user
+        if not context.args:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="ℹ️ Usage: /vip_episode <drama_code>"
+            )
+            return
+
+        film_link = get_film_link(context.args[0], is_vip=True)
+        if not film_link:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Drama code not found"
+            )
+            return
+
+        if check_vip_status(user.id):
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"💎 VIP Access:\n{film_link}"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔒 VIP members only content!\n\n"
+                     "Upgrade to VIP to watch unlimited content. Only Rp2,000 for 1 day!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💎 Upgrade Now", callback_data="vip")],
+                    [InlineKeyboardButton("🎬 Try Free Version", callback_data=f"free_{context.args[0]}")]
+                ])
+            )
+    except Exception as e:
+        logger.error(f"Error in vip_episode: {e}")
+        await send_error_message(update, context)
+
+async def button_handler(update: Update, context: CallbackContext):
+    try:
+        query = update.callback_query
+        await query.answer()
+        
+        if query.data == "menu":
+            await start(update, context)
+        elif query.data == "vip":
+            await vip(update, context)
+        elif query.data == "status":
+            await status(update, context)
+        elif query.data.startswith("free_"):
+            context.args = [query.data.split("_")[1]]
+            await gratis(update, context)
+    except Exception as e:
+        logger.error(f"Error in button_handler: {e}")
+        await send_error_message(update, context)
+
+async def handle_message(update: Update, context: CallbackContext):
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="ℹ️ Please use available commands. Type /start to see the menu."
+        )
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
+
+async def send_error_message(update: Update, context: CallbackContext):
+    try:
+        error_msg = (
+            "⚠️ Sorry, we're experiencing technical issues\n\n"
+            "Our team has been notified. "
+            "Please try again later or contact admin if the problem persists."
+        )
+        
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=error_msg
+        )
+    except Exception as e:
+        logger.error(f"Failed to send error message: {e}")
+
 async def generate_film_links(update: Update, context: CallbackContext):
-    """Admin command to generate film links (NEW)"""
+    """Generate film links (NEW)"""
     if str(update.effective_user.id) != "YOUR_ADMIN_ID":  # Ganti dengan ID Telegram admin
         return
 
@@ -280,10 +479,6 @@ async def generate_film_links(update: Update, context: CallbackContext):
         f"▫️ [Part 2 ({'VIP' if film_data['is_part2_vip'] else 'Free'})]({part2_link})"
     )
 
-# [ALL YOUR ORIGINAL HANDLERS REMAIN EXACTLY THE SAME HERE]
-# vip(), status(), gratis(), vip_episode(), button_handler(), 
-# handle_message(), send_error_message() - TIDAK ADA PERUBAHAN
-
 async def post_init(application: Application) -> None:
     """Initialize webhook after startup"""
     try:
@@ -306,13 +501,13 @@ def main() -> None:
             .post_init(post_init) \
             .build()
 
-        # Register ALL handlers
+        # Register handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("vip", vip))
         application.add_handler(CommandHandler("status", status))
         application.add_handler(CommandHandler("free", gratis))
         application.add_handler(CommandHandler("vip_episode", vip_episode))
-        application.add_handler(CommandHandler("generate_link", generate_film_links))  # NEW
+        application.add_handler(CommandHandler("generate_link", generate_film_links))
         application.add_handler(CallbackQueryHandler(button_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 

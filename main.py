@@ -185,7 +185,8 @@ async def start(update: Update, context: CallbackContext):
         # Handle film links if provided
         if context.args:
             try:
-                film_code, part = decode_film_code(context.args[0])
+                encoded_str = context.args[0]
+                film_code, part = decode_film_code(encoded_str)
                 film_data = get_film_info(film_code)
                 
                 if not film_data:
@@ -194,32 +195,43 @@ async def start(update: Update, context: CallbackContext):
 
                 if part == "P1":
                     # Forward Part 1 to user
-                    await context.bot.forward_message(
-                        chat_id=update.effective_chat.id,
-                        from_chat_id=CHANNEL_PRIVATE,
-                        message_id=film_data['free_msg_id']
-                    )
-                    
-                    # Show continue button for Part 2
-                    if film_data['is_part2_vip']:
-                        keyboard = [
-                            [InlineKeyboardButton(
-                                "⏩ Lanjut Part 2 (VIP)", 
-                                url=f"https://t.me/{BOT_USERNAME}?start={encode_film_code(film_code, 'P2')}"
-                            )]
-                        ]
-                        await update.message.reply_text(
-                            "Akhir dari Part 1...",
-                            reply_markup=InlineKeyboardMarkup(keyboard)
-                        )
-                
-                elif part == "P2":
-                    if check_vip_status(user.id) or not film_data['is_part2_vip']:
+                    try:
                         await context.bot.forward_message(
                             chat_id=update.effective_chat.id,
                             from_chat_id=CHANNEL_PRIVATE,
-                            message_id=film_data['vip_msg_id']
+                            message_id=film_data['free_msg_id']
                         )
+                    except Exception as e:
+                        logger.error(f"Error forwarding P1: {e}")
+                        await update.message.reply_text("❌ Gagal memuat video Part 1")
+                        return
+                    
+                    # Show continue button for Part 2
+                    keyboard = [
+                        [InlineKeyboardButton(
+                            "⏩ Lanjut Part 2" + (" (VIP)" if film_data['is_part2_vip'] else ""), 
+                            url=f"https://t.me/{BOT_USERNAME}?start={encode_film_code(film_code, 'P2')}"
+                        )]
+                    ]
+                    await update.message.reply_text(
+                        "Akhir dari Part 1...",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return
+                
+                elif part == "P2":
+                    if check_vip_status(user.id) or not film_data['is_part2_vip']:
+                        try:
+                            await context.bot.forward_message(
+                                chat_id=update.effective_chat.id,
+                                from_chat_id=CHANNEL_PRIVATE,
+                                message_id=film_data['vip_msg_id']
+                            )
+                            return
+                        except Exception as e:
+                            logger.error(f"Error forwarding P2: {e}")
+                            await update.message.reply_text("❌ Gagal memuat video Part 2")
+                            return
                     else:
                         await update.message.reply_text(
                             "🔒 Part 2 khusus member VIP!\n\n"
@@ -228,11 +240,12 @@ async def start(update: Update, context: CallbackContext):
                                 [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")]
                             ])
                         )
-                return
+                        return
             except Exception as e:
                 logger.error(f"Error processing film link: {e}")
+                # Fall through to normal start if there's an error
 
-        # Original start message
+        # Original start message (only shown if no valid film code provided)
         keyboard = [
             [InlineKeyboardButton("🎬 Drama List", url="https://t.me/DramaCinaPlus")],
             [InlineKeyboardButton("💎 VIP Subscription", callback_data="vip")],
@@ -320,7 +333,6 @@ async def status(update: Update, context: CallbackContext):
             chat_id=update.effective_chat.id,
             text=status_msg,
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
     except Exception as e:
         logger.error(f"Error in status: {e}")
         await send_error_message(update, context)

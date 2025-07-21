@@ -272,7 +272,7 @@ async def start(update: Update, context: CallbackContext):
             "✨ 5 tontonan gratis setiap hari\n"
             "💎 Akses tak terbatas untuk member VIP\n\n"
             "Silakan pilih menu di bawah:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error di start: {e}")
         await send_error_message(update, context)

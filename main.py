@@ -332,7 +332,7 @@ async def status(update: Update, context: CallbackContext):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=status_msg,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error in status: {e}")
         await send_error_message(update, context)

@@ -20,7 +20,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
-CHANNEL_PRIVATE = "+26qHfY2TK9JkZjZl"  # Diubah ke ID channel private tempat video disimpan
+CHANNEL_PRIVATE = "-1002683110383"  # DIUBAH: Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
 
@@ -205,10 +205,10 @@ async def start(update: Update, context: CallbackContext):
 
                 if part == "P1":
                     try:
-                        # Menggunakan copy_message untuk mengirim video
+                        # DIUBAH: Gunakan copy_message dengan parameter yang dikonversi ke integer
                         await context.bot.copy_message(
                             chat_id=update.effective_chat.id,
-                            from_chat_id=CHANNEL_PRIVATE,
+                            from_chat_id=int(CHANNEL_PRIVATE),
                             message_id=int(film_data['free_msg_id'])
                         )
                         
@@ -225,10 +225,12 @@ async def start(update: Update, context: CallbackContext):
                         )
                         return
                     except Exception as e:
-                        logger.error(f"Error mengirim video Part 1: {e}")
+                        logger.error(f"Error mengirim P1: {e}")
                         await update.message.reply_text(
                             "❌ Gagal memuat video Part 1\n"
-                            f"Pastikan bot adalah admin di channel dan message ID benar\n"
+                            f"Pastikan:\n"
+                            f"1. Bot sudah admin di channel\n"
+                            f"2. Message ID benar\n"
                             f"Error: {str(e)}"
                         )
                         return
@@ -238,12 +240,12 @@ async def start(update: Update, context: CallbackContext):
                         try:
                             await context.bot.copy_message(
                                 chat_id=update.effective_chat.id,
-                                from_chat_id=CHANNEL_PRIVATE,
+                                from_chat_id=int(CHANNEL_PRIVATE),
                                 message_id=int(film_data['vip_msg_id'])
                             )
                             return
                         except Exception as e:
-                            logger.error(f"Error mengirim video Part 2: {e}")
+                            logger.error(f"Error mengirim P2: {e}")
                             await update.message.reply_text("❌ Gagal memuat video Part 2")
                             return
                     else:
@@ -259,7 +261,7 @@ async def start(update: Update, context: CallbackContext):
                 logger.error(f"Error memproses link film: {e}")
                 await update.message.reply_text("❌ Terjadi kesalahan saat memproses link film")
 
-        # Pesan start asli (hanya ditampilkan jika tidak ada kode film yang valid)
+        # Pesan start asli
         keyboard = [
             [InlineKeyboardButton("🎬 List Film Drama", url="https://t.me/DramaCinaPlus")],
             [InlineKeyboardButton("💎 Langganan VIP", callback_data="vip")],
@@ -277,7 +279,6 @@ async def start(update: Update, context: CallbackContext):
         logger.error(f"Error di start: {e}")
         await send_error_message(update, context)
 
-# [Bagian lainnya tetap sama persis seperti yang Anda berikan]
 async def vip(update: Update, context: CallbackContext):
     try:
         keyboard = []

@@ -20,7 +20,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
-CHANNEL_PRIVATE = "@DramaCinaArchive"  # Channel private untuk video
+CHANNEL_PRIVATE = "@DramaCinaArchieve"  # Channel private untuk video
 PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
 
@@ -228,9 +228,7 @@ async def start(update: Update, context: CallbackContext):
                         logger.error(f"Error mengirim P1: {e}")
                         await update.message.reply_text(
                             "❌ Gagal memuat video Part 1\n"
-                            f"Pastikan bot adalah admin di channel {CHANNEL_PRIVATE}\n"
-                            f"dan message ID {film_data['free_msg_id']} benar"
-                        )
+                            )
                         return
 
                 elif part == "P2":

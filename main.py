@@ -23,6 +23,14 @@ BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "-1002683110383"  # DIUBAH: Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
+TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "rahasia_anda")
+TRAKTEER_PACKAGE_MAPPING = {
+    "vip1hari": {"days": 1, "price": 2000},
+    "vip3hari": {"days": 3, "price": 5000},
+    "vip7hari": {"days": 7, "price": 10000},
+    "vip30hari": {"days": 30, "price": 30000},
+    "vip5bulan": {"days": 150, "price": 150000}
+}
 
 # Setup logging
 logging.basicConfig(
@@ -158,6 +166,23 @@ def check_vip_status(user_id):
         return False
     return safe_sheets_operation(operation)
 
+def update_vip_status(user_id, package_id):
+    """Update status VIP user di Google Sheets berdasarkan paket"""
+    def operation():
+        row = get_user_row(user_id)
+        if not row:
+            return False
+            
+        package = TRAKTEER_PACKAGE_MAPPING.get(package_id)
+        if not package:
+            return False
+            
+        expiry_date = (datetime.now() + timedelta(days=package['days'])).strftime("%Y-%m-%d")
+        sheet_members.update_cell(row, 3, "vip")
+        sheet_members.update_cell(row, 4, expiry_date)
+        return True
+    return safe_sheets_operation(operation)
+
 # ===== FUNGSI BAGIAN FILM BARU =====
 def get_film_info(film_code):
     """Mendapatkan data film lengkap termasuk ID pesan"""
@@ -281,19 +306,24 @@ async def start(update: Update, context: CallbackContext):
 
 async def vip(update: Update, context: CallbackContext):
     try:
+        user_id = update.effective_user.id
         keyboard = []
         for package in VIP_PACKAGES:
-            keyboard.append([InlineKeyboardButton(package["label"], url=package["url"])])
+            package_url = f"{package['url']}?utm_source={user_id}"
+            keyboard.append([InlineKeyboardButton(
+                package["label"], 
+                url=package_url
+            )])
         keyboard.append([InlineKeyboardButton("🔙 Kembali ke Menu", callback_data="menu")])
         
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="💎 **PAKET LANGGANAN VIP** 💎\n\n"
-                 "Dapatkan akses unlimited ke semua drama:\n"
-                 "✅ Nonton sepuasnya tanpa batas\n"
-                 "✅ Kualitas HD terbaik\n"
-                 "✅ Update episode terbaru setiap harinya\n\n"
-                 "⬇️ Pilih paket favoritmu:",
+                 "Setelah membayar:\n"
+                 "1. Klik tombol paket di bawah\n"
+                 "2. Isi email dengan format: `ID_TELEGRAM@vipbot.com`\n"
+                 f"3. Contoh: `{user_id}@vipbot.com`\n\n"
+                 "Status VIP akan aktif otomatis dalam 1 menit setelah pembayaran.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )

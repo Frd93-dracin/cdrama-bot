@@ -29,7 +29,7 @@ TRAKTEER_PACKAGE_MAPPING = {
     "vip3hari": {"days": 3, "price": 5000},
     "vip7hari": {"days": 7, "price": 10000},
     "vip30hari": {"days": 30, "price": 30000},
-    "vip5bulan": {"days": 150, "price": 150000}
+    "vip5bulan": {"days": 180, "price": 150000}
 }
 
 # Setup logging
@@ -61,7 +61,7 @@ VIP_PACKAGES = [
     {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vip3hari"},
     {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vip7hari"},
     {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vip30hari"},
-    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 150, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
+    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vip5bulan"}
 ]
 
 # ===== FUNGSI BANTUAN =====

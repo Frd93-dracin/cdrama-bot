@@ -57,11 +57,11 @@ except Exception as e:
 
 # Daftar paket VIP
 VIP_PACKAGES = [
-    {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/dramacina+/vip1hari/tip"},
-    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/dramacina+/vip3hari/tip"},
-    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/dramacina+/vip7hari/tip"},
-    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/dramacina+/vip30hari/tip"},
-    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/dramacina+/vip5bulan/tip"}
+    {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/dramacina+/vip-1-hari/tip"},
+    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/dramacina+/vip-3-hari/tip"},
+    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/dramacina+/vip-7-hari/tip"},
+    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/dramacina+/vip-1-bulan/tip"},
+    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/dramacina+/vip-6-bulan/tip"}
 ]
 
 # ===== FUNGSI BANTUAN =====

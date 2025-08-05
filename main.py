@@ -16,13 +16,16 @@ from telegram.ext import (
     CallbackContext
 )
 from oauth2client.service_account import ServiceAccountCredentials
+from telegram.ext import TypeHandler, CommandHandler
+from telegram import Update
+from telegram.ext import ContextTypes
 
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "-1002683110383"  # DIUBAH: Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
+WEBHOOK_URL = os.getenv('WEBHOOK_URL') 
 TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "rahasia_anda")
 TRAKTEER_PACKAGE_MAPPING = {
     "vip1hari": {"days": 1, "price": 2000},
@@ -182,6 +185,22 @@ def update_vip_status(user_id, package_id):
         sheet_members.update_cell(row, 4, expiry_date)
         return True
     return safe_sheets_operation(operation)
+
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk mengecek status bot"""
+    try:
+        # Kirim respon sederhana
+        await update.message.reply_text("✅ Bot is running and healthy!")
+        
+        # Anda bisa tambahkan pengecekan lain di sini seperti:
+        # - Koneksi database
+        # - Koneksi ke sheet
+        # - Dll
+        logger.info("Health check executed successfully")
+        
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        await update.message.reply_text("⚠️ Bot is running but with some issues")
 
 # ===== FUNGSI BAGIAN FILM BARU =====
 def get_film_info(film_code):
@@ -560,6 +579,7 @@ def main() -> None:
 
         # Register handlers
         application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("health", health_check))
         application.add_handler(CommandHandler("vip", vip))
         application.add_handler(CommandHandler("status", status))
         application.add_handler(CommandHandler("gratis", gratis))
@@ -586,6 +606,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

@@ -18,7 +18,7 @@ from telegram.ext import (
 from oauth2client.service_account import ServiceAccountCredentials
 
 # ===== KONFIGURASI =====
-BOT_TOKEN = os.getenv('BOT_TOKEN', "7895835591:AAF8LfMEDGP03YaoLlEhsGqwNVcOdSssny0")
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "-1002683110383"  # DIUBAH: Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
@@ -586,6 +586,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

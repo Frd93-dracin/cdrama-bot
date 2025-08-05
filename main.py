@@ -628,50 +628,7 @@ def main() -> None:
             .post_init(post_init) \
             .build()
 
-        # Create Flask app for webhook routes
-        flask_app = Flask(__name__)
-        
-        # Setup Trakteer webhook route
-        @flask_app.route('/trakteer_webhook', methods=['POST'])
-        def handle_trakteer_webhook():
-            # Verify secret
-            incoming_secret = request.headers.get('X-Trakteer-Secret')
-            if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
-                logger.warning("Unauthorized webhook attempt")
-                return jsonify({"status": "unauthorized"}), 401
-
-            data = request.json
-            logger.info(f"Webhook data received: {data}")
-
-            # Process only successful payments
-            if data.get('status') == 'paid':
-                package_id = data.get('package_sku')
-                customer_email = data.get('customer', {}).get('email', '')
-                
-                # Extract user_id from email (format: 123456@vipbot.com)
-                if customer_email.endswith('@vipbot.com'):
-                    user_id = customer_email.split('@')[0]
-                    
-                    # Update VIP status
-                    if package_id in TRAKTEER_PACKAGE_MAPPING:
-                        success = update_vip_status(user_id, package_id)
-                        if success:
-                            # Send notification to user
-                            try:
-                                application.bot.send_message(
-                                    chat_id=user_id,
-                                    text=f"🎉 Pembayaran VIP berhasil!\n"
-                                         f"Status VIP Anda sudah aktif.\n\n"
-                                         f"Selamat menonton!"
-                                )
-                            except Exception as e:
-                                logger.error(f"Gagal mengirim notifikasi ke user: {e}")
-                            
-                            return jsonify({"status": "success"}), 200
-
-            return jsonify({"status": "ignored"}), 200
-
-        # Register Telegram handlers (keep existing handlers)
+        # Register handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("health", health_check))
         application.add_handler(CommandHandler("vip", vip))
@@ -684,23 +641,61 @@ def main() -> None:
 
         logger.info("🤖 Bot starting in webhook mode...")
         
-        # Run webhook server with Flask integration
+        # Run webhook server
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=WEBHOOK_URL,
             url_path=BOT_TOKEN,
             cert=None,
-            drop_pending_updates=True,
-            flask_app=flask_app  # Add Flask app integration
+            drop_pending_updates=True
         )
 
     except Exception as e:
         logger.error(f"❌ Fatal error: {e}")
         raise
 
+from flask import Flask, request, jsonify
+
+# Create separate Flask app for Trakteer webhook
+webhook_app = Flask(__name__)
+
+@webhook_app.route('/trakteer_webhook', methods=['POST'])
+def handle_trakteer_webhook():
+    try:
+        # Verify secret
+        incoming_secret = request.headers.get('X-Trakteer-Secret')
+        if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
+            logger.warning("Unauthorized webhook attempt")
+            return jsonify({"status": "unauthorized"}), 401
+
+        data = request.get_json()
+        logger.info(f"Webhook data received: {data}")
+
+        if data.get('status') == 'paid':
+            package_id = data.get('package_sku')
+            customer_email = data.get('customer', {}).get('email', '')
+            
+            if customer_email.endswith('@vipbot.com'):
+                user_id = customer_email.split('@')[0]
+                if package_id in TRAKTEER_PACKAGE_MAPPING:
+                    update_vip_status(user_id, package_id)
+                    return jsonify({"status": "success"}), 200
+        
+        return jsonify({"status": "ignored"}), 200
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        return jsonify({"status": "error"}), 500
+
 if __name__ == "__main__":
-    main()
+    # Run the Telegram bot in main thread
+    import threading
+    bot_thread = threading.Thread(target=main)
+    bot_thread.start()
+    
+    # Run Flask webhook in main thread
+    webhook_app.run(host='0.0.0.0', port=5000)
+
 
 
 

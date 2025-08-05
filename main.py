@@ -57,11 +57,16 @@ except Exception as e:
 
 # Daftar paket VIP
 VIP_PACKAGES = [
-    {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/vipdramacina/showcase/vip-1-hari-qyT25"},
-    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vipdramacina/showcase/vip-3-hari-AKlbO"},
-    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vipdramacina/showcase/vip-7-hari-6NwM6"},
-    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vipdramacina/showcase/vip-1-bulan-iWblQ"},
-    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vipdramacina/showcase/freebish-fLC04"}
+    {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/vipdramacina/tip?quantity=2&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+hari
+"},
+    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vipdramacina/tip?quantity=5&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+3+hari
+"},
+    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vipdramacina/tip?quantity=10&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+7+hari
+"},
+    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vipdramacina/tip?quantity=30&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+bulan
+"},
+    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vipdramacina/tip?quantity=150&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+6+bulan
+"}
 ]
 
 # ===== FUNGSI BANTUAN =====
@@ -586,3 +591,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

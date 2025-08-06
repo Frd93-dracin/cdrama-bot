@@ -552,9 +552,13 @@ app = Flask(__name__)
 def telegram_webhook():
     if request.method == "POST":
         try:
-            update = Update.de_json(request.get_json(force=True), application.bot)
+            # Log request
+            logger.info(f"📩 Incoming update: {request.json}")
             
-            # Create new event loop for the thread
+            # Process update
+            update = Update.de_json(request.json, application.bot)
+            
+            # Async processing
             def process_update(update):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -565,7 +569,7 @@ def telegram_webhook():
             return '', 200
             
         except Exception as e:
-            logger.error(f"Error processing update: {e}")
+            logger.error(f"⚠️ Error processing update: {e}")
             return '', 200
     return 'Method Not Allowed', 405
 
@@ -674,9 +678,10 @@ print(response.json())  # Cek response
 # Fix 3: Proper webhook setup function
 def setup_webhook():
     try:
-        # Pastikan URL benar dan token hanya muncul sekali
-        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{BOT_TOKEN}"
-        logger.info(f"Setting webhook to: {webhook_url}")
+        # PASTIKAN HANYA ADA 1 TOKEN DI URL
+        webhook_url = f"https://cdrama-bot.onrender.com/{BOT_TOKEN}"
+        
+        logger.info(f"🔧 Setting webhook to: {webhook_url}")
         
         response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
@@ -686,22 +691,28 @@ def setup_webhook():
                 'allowed_updates': ["message", "callback_query"]
             }
         )
-        if not response.json().get('ok'):
-            logger.error(f"Webhook setup failed: {response.json()}")
-        return response.json()
+        result = response.json()
+        if not result.get('ok'):
+            logger.error(f"❌ Webhook setup failed: {result}")
+        else:
+            logger.info(f"✅ Webhook setup success: {result}")
+        return result
     except Exception as e:
-        logger.error(f"Failed to set webhook: {e}")
+        logger.error(f"🔥 Failed to set webhook: {e}")
         return {"error": str(e)}
         
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Pastikan webhook terpasang saat start
+    # 1. Delete old webhook
+    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+    
+    # 2. Setup new webhook
     setup_webhook()
     
-    # Jalankan Flask
+    # 3. Run Flask
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
-            threaded=True)
+            debug=False)
 
 
 

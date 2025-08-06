@@ -557,21 +557,20 @@ def telegram_webhook():
             # Log request
             logger.info(f"📩 Incoming update: {request.json}")
             
-            # Process update
             update = Update.de_json(request.json, application.bot)
             
-            # Async processing
-            def process_update(update):
+            # Process update in background
+            def process_update():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(application.process_update(update))
                 loop.close()
             
-            Thread(target=process_update, args=(update,)).start()
+            Thread(target=process_update).start()
             return '', 200
             
         except Exception as e:
-            logger.error(f"⚠️ Error processing update: {e}")
+            logger.error(f"Error processing update: {e}")
             return '', 200
     return 'Method Not Allowed', 405
 
@@ -650,23 +649,6 @@ application.add_handler(CommandHandler("generate_link", generate_film_links))
 application.add_handler(CallbackQueryHandler(button_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-async def run_bot():
-    """Run Telegram bot"""
-    await application.initialize()
-    await application.start()
-    logger.info("Bot started")
-    await application.updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=WEBHOOK_URL,
-        drop_pending_updates=True
-    )
-    await application.bot.set_webhook(WEBHOOK_URL)
-    logger.info(f"Webhook set to: {WEBHOOK_URL}")
-
-
-
 response = requests.get(
     f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
     params={
@@ -723,11 +705,13 @@ if __name__ == "__main__":
     # 2. Setup new webhook
     setup_webhook()
     
-    # 3. Run Flask
+    # 3. Initialize bot
+    application.initialize()
+    
+    # 4. Run Flask
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
             debug=False)
-
 
 
 

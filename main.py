@@ -547,17 +547,19 @@ def decode_film_code(encoded_str):
 # ===== FLASK SERVER =====
 app = Flask(__name__)
 
-@app.route('/' + BOT_TOKEN, methods=['POST'])
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
 async def telegram_webhook():
-    """Handle Telegram webhook"""
     try:
-        json_data = await request.get_json()
-        update = Update.de_json(json_data, application.bot)
-        await application.update_queue.put(update)
-        return jsonify({"status": "ok"}), 200
+        # Log raw request
+        logger.info(f"Incoming update: {request.json}")
+        
+        update = Update.de_json(request.json, application.bot)
+        await application.process_update(update)
+        return '', 200  # Response kosong + status 200
+        
     except Exception as e:
-        logger.error(f"Telegram webhook error: {e}")
-        return jsonify({"status": "error"}), 500
+        logger.error(f"Webhook error: {str(e)}", exc_info=True)
+        return '', 200  # Tetap return 200 ke Telegram
 
 @app.route('/trakteer_webhook', methods=['POST'])
 def trakteer_webhook():
@@ -670,6 +672,7 @@ import requests
         }
     )
     run_flask()
+
 
 
 

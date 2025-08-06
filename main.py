@@ -434,7 +434,7 @@ async def vip_episode(update: Update, context: CallbackContext):
                      "Yuk upgrade ke VIP untuk nonton sepuasnya. Cuma Rp2.000 untuk 1 hari!",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("💎 Upgrade Sekarang", callback_data="vip")],
-                    [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}"))
+                    [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}")]
                 ])
             )
     except Exception as e:
@@ -639,3 +639,4 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run_bot())
     loop.run_forever()
+

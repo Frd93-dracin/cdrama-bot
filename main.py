@@ -660,8 +660,17 @@ if __name__ == "__main__":
     # loop = asyncio.get_event_loop()
     # loop.run_until_complete(run_bot())
     # loop.run_forever()
-
+import requests
+    WEBHOOK_URL = f"https://cdrama-bot.onrender.com/{BOT_TOKEN}"
+    requests.get(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+        params={
+            'url': WEBHOOK_URL,
+            'drop_pending_updates': True
+        }
+    )
     run_flask()
+
 
 
 

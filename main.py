@@ -6,6 +6,8 @@ import time
 import base64
 import sys
 import requests
+from fastapi import Request
+
 print("Python version:", sys.version)
 
 import asyncio
@@ -725,6 +727,7 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
             debug=False)
+
 
 
 

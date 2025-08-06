@@ -4,6 +4,7 @@ import gspread
 import logging
 import time
 import base64
+import asyncio
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -678,6 +679,69 @@ def run_bot():
         drop_pending_updates=True
     )
 
+async def run_bot():
+    """Run the Telegram bot"""
+    application = Application.builder() \
+        .token(BOT_TOKEN) \
+        .post_init(post_init) \
+        .build()
+
+    # Register all handlers (copy from your current main())
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("health", health_check))
+    # [ADD ALL YOUR OTHER HANDLERS HERE]
+    
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        url_path=BOT_TOKEN,
+        cert=None,
+        drop_pending_updates=True
+    )
+
+def run_flask_app():
+    """Run Flask webhook server"""
+    from flask import Flask, request, jsonify
+    
+    webhook_app = Flask(__name__)
+    
+    @webhook_app.route('/trakteer_webhook', methods=['POST'])
+    def handle_trakteer_webhook():
+        try:
+            incoming_secret = request.headers.get('X-Trakteer-Secret')
+            if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
+                return jsonify({"status": "unauthorized"}), 401
+            
+            data = request.get_json()
+            if data.get('status') == 'paid':
+                package_id = data.get('package_sku')
+                customer_email = data.get('customer', {}).get('email', '')
+                
+                if customer_email and customer_email.endswith('@vipbot.com'):
+                    user_id = customer_email.split('@')[0]
+                    if package_id in TRAKTEER_PACKAGE_MAPPING:
+                        update_vip_status(user_id, package_id)
+                        return jsonify({"status": "success"}), 200
+            
+            return jsonify({"status": "ignored"}), 200
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return jsonify({"status": "error"}), 500
+    
+    webhook_app.run(host='0.0.0.0', port=5000)
+
+if __name__ == "__main__":
+    import threading
+    
+    # Run Flask in a separate thread
+    flask_thread = threading.Thread(target=run_flask_app)
+    flask_thread.daemon = True  # This ensures the thread exits when main program exits
+    flask_thread.start()
+    
+    # Run Telegram bot in main thread with async loop
+    asyncio.run(run_bot())
+
 if __name__ == "__main__":
     from flask import Flask, request, jsonify
     
@@ -713,6 +777,7 @@ if __name__ == "__main__":
     bot_thread.start()
     
     webhook_app.run(host='0.0.0.0', port=5000)
+
 
 
 

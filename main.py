@@ -652,15 +652,16 @@ async def run_bot():
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     # Start Flask in a separate thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+    # flask_thread = Thread(target=run_flask)
+    # flask_thread.daemon = True
+    # flask_thread.start()
 
     # Start Telegram bot
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_bot())
-    loop.run_forever()
+    # loop = asyncio.get_event_loop()
+    # loop.run_until_complete(run_bot())
+    # loop.run_forever()
 
+    run_flask()
 
 
 

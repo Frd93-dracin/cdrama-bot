@@ -6,7 +6,11 @@ import time
 import base64
 import sys
 print("Python version:", sys.version)
-print("Werkzeug version:", werkzeug_version)
+
+import asyncio
+from threading import Thread
+from flask import Flask, request, jsonify
+from werkzeug import __version__ as werkzeug_version
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -19,10 +23,7 @@ from telegram.ext import (
     CallbackContext
 )
 from oauth2client.service_account import ServiceAccountCredentials
-import asyncio
-from threading import Thread
-from flask import Flask, request, jsonify
-from werkzeug import __version__ as werkzeug_version
+
 from gunicorn.app.base import BaseApplication
 try:
     from werkzeug.urls import url_quote  # Untuk Flask < 2.0
@@ -647,6 +648,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run_bot())
     loop.run_forever()
+
 
 
 

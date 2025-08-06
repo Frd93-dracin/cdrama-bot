@@ -664,6 +664,21 @@ response = requests.get(
 
 print(response.json())  # Cek response
 
+def setup_webhook():
+    try:
+        response = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+            params={
+                'url': f"{WEBHOOK_URL}/{BOT_TOKEN}",
+                'drop_pending_updates': True
+            }
+        )
+        logger.info(f"Webhook setup result: {response.json()}")
+    except Exception as e:
+        logger.error(f"Failed to set webhook: {e}")
+
+setup_webhook()
+
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     # Start Flask in a separate thread
@@ -677,6 +692,7 @@ if __name__ == "__main__":
     # loop.run_forever()
 
     run_flask()
+
 
 
 

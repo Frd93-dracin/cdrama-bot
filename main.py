@@ -699,34 +699,17 @@ async def webhook(request: Request):
 
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # 1. Delete old webhook
+    import requests
+
+    # 1. Delete old webhook (optional, tapi bagus untuk reset)
     requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-    
-    # 2. Setup new webhook
-    setup_webhook()
-    
-    # 3. Initialize bot
-    application.initialize()
-    
-    # 4. Run Flask
-    app.run(host='0.0.0.0', 
-            port=int(os.getenv('PORT', 5000)),
-            debug=False)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # 2. Jalankan webhook dari python-telegram-bot
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 8443)),
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+    )
 
 
 

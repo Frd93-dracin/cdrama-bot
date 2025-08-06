@@ -36,7 +36,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "-1002683110383"  # Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com")
 TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "trhook-KoDBsnzkVjNF5gCQh4xDwcdN")
 TRAKTEER_PACKAGE_MAPPING = {
     "vip1hari": {"days": 1, "price": 2000},
@@ -713,6 +713,7 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
             debug=False)
+
 
 
 

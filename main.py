@@ -4,6 +4,10 @@ import gspread
 import logging
 import time
 import base64
+import sys
+print("Python version:", sys.version)
+print("Flask version:", flask.__version__)
+print("Werkzeug version:", werkzeug.__version__)
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -20,6 +24,10 @@ import asyncio
 from threading import Thread
 from flask import Flask, request, jsonify
 from gunicorn.app.base import BaseApplication
+try:
+    from werkzeug.urls import url_quote  # Untuk Flask < 2.0
+except ImportError:
+    from werkzeug.utils import quote as url_quote  # Untuk Flask >= 2.0
 
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -639,4 +647,5 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run_bot())
     loop.run_forever()
+
 

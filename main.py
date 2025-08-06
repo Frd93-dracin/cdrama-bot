@@ -549,18 +549,25 @@ def decode_film_code(encoded_str):
 app = Flask(__name__)
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-async def telegram_webhook():
-    try:
-        # Log raw request
-        logger.info(f"Incoming update: {request.json}")
-        
-        update = Update.de_json(request.json, application.bot)
-        await application.process_update(update)
-        return '', 200  # Response kosong + status 200
-        
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}", exc_info=True)
-        return '', 200  # Tetap return 200 ke Telegram
+def telegram_webhook():
+    if request.method == "POST":
+        try:
+            update = Update.de_json(request.get_json(force=True), application.bot)
+            
+            # Create new event loop for the thread
+            def process_update(update):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(application.process_update(update))
+                loop.close()
+            
+            Thread(target=process_update, args=(update,)).start()
+            return '', 200
+            
+        except Exception as e:
+            logger.error(f"Error processing update: {e}")
+            return '', 200
+    return 'Method Not Allowed', 405
 
 @app.route('/trakteer_webhook', methods=['POST'])
 def trakteer_webhook():
@@ -664,39 +671,38 @@ response = requests.get(
 
 print(response.json())  # Cek response
 
+# Fix 3: Proper webhook setup function
 def setup_webhook():
     try:
-        webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        # Pastikan URL benar dan token hanya muncul sekali
+        webhook_url = f"{WEBHOOK_URL.rstrip('/')}/{BOT_TOKEN}"
         logger.info(f"Setting webhook to: {webhook_url}")
         
-        response = requests.get(
+        response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
-            params={
+            json={
                 'url': webhook_url,
-                'drop_pending_updates': True
+                'drop_pending_updates': True,
+                'allowed_updates': ["message", "callback_query"]
             }
         )
-        logger.info(f"Webhook setup result: {response.json()}")
+        if not response.json().get('ok'):
+            logger.error(f"Webhook setup failed: {response.json()}")
         return response.json()
     except Exception as e:
         logger.error(f"Failed to set webhook: {e}")
         return {"error": str(e)}
-
-setup_webhook()
-
+        
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Start Flask in a separate thread
-    # flask_thread = Thread(target=run_flask)
-    # flask_thread.daemon = True
-    # flask_thread.start()
+    # Pastikan webhook terpasang saat start
+    setup_webhook()
+    
+    # Jalankan Flask
+    app.run(host='0.0.0.0', 
+            port=int(os.getenv('PORT', 5000)),
+            threaded=True)
 
-    # Start Telegram bot
-    # loop = asyncio.get_event_loop()
-    # loop.run_until_complete(run_bot())
-    # loop.run_forever()
-
-    run_flask()
 
 
 

@@ -5,6 +5,7 @@ import logging
 import time
 import base64
 import sys
+import requests
 print("Python version:", sys.version)
 
 import asyncio
@@ -76,16 +77,6 @@ VIP_PACKAGES = [
     {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vipdramacina/tip?quantity=30&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+bulan"},
     {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vipdramacina/tip?quantity=150&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+6+bulan"}
 ]
-
-response = requests.get(
-    f"https://api.telegram.org/bot{TOKEN}/setWebhook",
-    params={
-        'url': f"{WEBHOOK_URL}/{TOKEN}",
-        'drop_pending_updates': True
-    }
-)
-
-print(response.json())
 
 # ===== FUNGSI BANTUAN =====
 def refresh_connection():
@@ -661,6 +652,18 @@ async def run_bot():
     await application.bot.set_webhook(WEBHOOK_URL)
     logger.info(f"Webhook set to: {WEBHOOK_URL}")
 
+
+
+response = requests.get(
+    f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+    params={
+        'url': f"{WEBHOOK_URL}/{TOKEN}",
+        'drop_pending_updates': True
+    }
+)
+
+print(response.json())  # Cek response
+
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     # Start Flask in a separate thread
@@ -674,6 +677,7 @@ if __name__ == "__main__":
     # loop.run_forever()
 
     run_flask()
+
 
 
 

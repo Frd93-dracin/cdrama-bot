@@ -77,6 +77,16 @@ VIP_PACKAGES = [
     {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vipdramacina/tip?quantity=150&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+6+bulan"}
 ]
 
+response = requests.get(
+    f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+    params={
+        'url': f"{WEBHOOK_URL}/{TOKEN}",
+        'drop_pending_updates': True
+    }
+)
+
+print(response.json())
+
 # ===== FUNGSI BANTUAN =====
 def refresh_connection():
     """Refresh koneksi Google Sheets"""
@@ -664,6 +674,7 @@ if __name__ == "__main__":
     # loop.run_forever()
 
     run_flask()
+
 
 
 

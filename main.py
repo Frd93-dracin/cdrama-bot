@@ -17,16 +17,17 @@ from telegram.ext import (
 )
 from oauth2client.service_account import ServiceAccountCredentials
 import asyncio
-from multiprocessing import Process
+from threading import Thread
 from flask import Flask, request, jsonify
+from gunicorn.app.base import BaseApplication
 
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
-CHANNEL_PRIVATE = "-1002683110383"  # DIUBAH: Gunakan ID channel numerik
+CHANNEL_PRIVATE = "-1002683110383"  # Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com") + '/' + BOT_TOKEN
-TRAKTEER_WEBHOOK_SECRET = "trhook-KoDBsnzkVjNF5gCQh4xDwcdN"  # Token webhook dari Trakteer
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://odrama-bot.onrender.com") + '/' + BOT_TOKEN
+TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "trhook-KoDBsnzkVjNF5gCQh4xDwcdN")
 TRAKTEER_PACKAGE_MAPPING = {
     "vip1hari": {"days": 1, "price": 2000},
     "vip3hari": {"days": 3, "price": 5000},
@@ -57,7 +58,7 @@ try:
 except Exception as e:
     logger.error(f"❌ Gagal menginisialisasi Google Sheets: {e}")
     raise
-    
+
 # Daftar paket VIP
 VIP_PACKAGES = [
     {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/vipdramacina/tip?quantity=2&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+hari"},
@@ -186,46 +187,6 @@ def update_vip_status(user_id, package_id):
         return True
     return safe_sheets_operation(operation)
 
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk mengecek status bot"""
-    try:
-        # Kirim respon sederhana
-        await update.message.reply_text("✅ Bot is running and healthy!")
-        
-        # Anda bisa tambahkan pengecekan lain di sini seperti:
-        # - Koneksi database
-        # - Koneksi ke sheet
-        # - Dll
-        logger.info("Health check executed successfully")
-        
-    except Exception as e:
-        logger.error(f"Health check error: {e}")
-        await update.message.reply_text("⚠️ Bot is running but with some issues")
-
-# ===== FUNGSI BAGIAN FILM BARU =====
-def get_film_info(film_code):
-    """Mendapatkan data film lengkap termasuk ID pesan"""
-    def operation():
-        records = sheet_films.get_all_records()
-        for record in records:
-            if record['code'] == film_code:
-                return {
-                    'title': record['title'],
-                    'free_msg_id': record['free_msg_id'],
-                    'vip_msg_id': record['vip_msg_id'],
-                    'is_part2_vip': record.get('is_part2_vip', 'TRUE') == 'TRUE'
-                }
-        return None
-    return safe_sheets_operation(operation)
-
-def encode_film_code(film_code, part):
-    """Encode kode film untuk URL"""
-    return base64.urlsafe_b64encode(f"{film_code}_{part}".encode()).decode()
-
-def decode_film_code(encoded_str):
-    """Decode kode film dari URL"""
-    return base64.urlsafe_b64decode(encoded_str.encode()).decode().split("_")
-
 # ===== HANDLER COMMAND =====
 async def start(update: Update, context: CallbackContext):
     """Handler untuk command /start"""
@@ -236,7 +197,6 @@ async def start(update: Update, context: CallbackContext):
             if not add_new_user(user):
                 raise Exception("Gagal mendaftarkan user baru")
 
-        # Handle link film jika disediakan
         if context.args:
             try:
                 encoded_str = context.args[0]
@@ -249,14 +209,12 @@ async def start(update: Update, context: CallbackContext):
 
                 if part == "P1":
                     try:
-                        # DIUBAH: Gunakan copy_message dengan parameter yang dikonversi ke integer
                         await context.bot.copy_message(
                             chat_id=update.effective_chat.id,
                             from_chat_id=int(CHANNEL_PRIVATE),
                             message_id=int(film_data['free_msg_id'])
                         )
                         
-                        # Tampilkan tombol lanjut untuk Part 2
                         keyboard = [
                             [InlineKeyboardButton(
                                 "⏩ Lanjut Part 2" + (" (VIP)" if film_data['is_part2_vip'] else ""), 
@@ -305,7 +263,6 @@ async def start(update: Update, context: CallbackContext):
                 logger.error(f"Error memproses link film: {e}")
                 await update.message.reply_text("❌ Terjadi kesalahan saat memproses link film")
 
-        # Pesan start asli
         keyboard = [
             [InlineKeyboardButton("🎬 List Film Drama", url="https://t.me/DramaCinaPlus")],
             [InlineKeyboardButton("💎 Langganan VIP", callback_data="vip")],
@@ -477,7 +434,7 @@ async def vip_episode(update: Update, context: CallbackContext):
                      "Yuk upgrade ke VIP untuk nonton sepuasnya. Cuma Rp2.000 untuk 1 hari!",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("💎 Upgrade Sekarang", callback_data="vip")],
-                    [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}")]
+                    [InlineKeyboardButton("🎬 Coba Versi Gratis", callback_data=f"free_{context.args[0]}"))
                 ])
             )
     except Exception as e:
@@ -555,91 +512,86 @@ async def generate_film_links(update: Update, context: CallbackContext):
         f"▫️ [Part 2 ({'VIP' if film_data['is_part2_vip'] else 'Free'})]({part2_link})"
     )
 
-async def post_init(application: Application) -> None:
-    """Initialize webhook after startup"""
+def get_film_info(film_code):
+    """Mendapatkan data film lengkap termasuk ID pesan"""
+    def operation():
+        records = sheet_films.get_all_records()
+        for record in records:
+            if record['code'] == film_code:
+                return {
+                    'title': record['title'],
+                    'free_msg_id': record['free_msg_id'],
+                    'vip_msg_id': record['vip_msg_id'],
+                    'is_part2_vip': record.get('is_part2_vip', 'TRUE') == 'TRUE'
+                }
+        return None
+    return safe_sheets_operation(operation)
+
+def encode_film_code(film_code, part):
+    """Encode kode film untuk URL"""
+    return base64.urlsafe_b64encode(f"{film_code}_{part}".encode()).decode()
+
+def decode_film_code(encoded_str):
+    """Decode kode film dari URL"""
+    return base64.urlsafe_b64decode(encoded_str.encode()).decode().split("_")
+
+# ===== FLASK SERVER =====
+app = Flask(__name__)
+
+@app.route('/' + BOT_TOKEN, methods=['POST'])
+async def telegram_webhook():
+    """Handle Telegram webhook"""
     try:
-        await application.bot.delete_webhook()
-        await application.bot.set_webhook(
-            url=WEBHOOK_URL,
-            max_connections=40
-        )
-        logger.info(f"✅ Webhook successfully set to: {WEBHOOK_URL}")
+        json_data = await request.get_json()
+        update = Update.de_json(json_data, application.bot)
+        await application.update_queue.put(update)
+        return jsonify({"status": "ok"}), 200
     except Exception as e:
-        logger.error(f"❌ Failed to set webhook: {e}")
-        raise
+        logger.error(f"Telegram webhook error: {e}")
+        return jsonify({"status": "error"}), 500
 
-async def run_bot():
-    """Run Telegram bot"""
-    application = Application.builder() \
-        .token(BOT_TOKEN) \
-        .post_init(post_init) \
-        .build()
+@app.route('/trakteer_webhook', methods=['POST'])
+def trakteer_webhook():
+    """Handle Trakteer webhook"""
+    try:
+        incoming_secret = request.headers.get('X-Trakteer-Secret')
+        if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
+            return jsonify({"status": "unauthorized"}), 401
+        
+        data = request.get_json()
+        if data.get('status') == 'paid':
+            package_id = data.get('package_sku')
+            customer_email = data.get('customer', {}).get('email', '')
+            
+            if customer_email and customer_email.endswith('@vipbot.com'):
+                user_id = customer_email.split('@')[0]
+                if package_id in TRAKTEER_PACKAGE_MAPPING:
+                    update_vip_status(user_id, package_id)
+                    return jsonify({"status": "success"}), 200
+        
+        return jsonify({"status": "ignored"}), 200
+    except Exception as e:
+        logger.error(f"Trakteer webhook error: {e}")
+        return jsonify({"status": "error"}), 500
 
-    # Register all handlers (copy from your current main())
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("health", health_check))
-    application.add_handler(CommandHandler("vip", vip))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("gratis", gratis))
-    application.add_handler(CommandHandler("vip_episode", vip_episode))
-    application.add_handler(CommandHandler("generate_link", generate_film_links))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+class FlaskApplication(BaseApplication):
+    """Gunicorn Flask wrapper"""
+    def __init__(self, app, options=None):
+        self.options = options or {}
+        self.application = app
+        super().__init__()
 
-    await application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=WEBHOOK_URL,
-        url_path=BOT_TOKEN,
-        cert=None,
-        drop_pending_updates=True
-    )
+    def load_config(self):
+        config = {key: value for key, value in self.options.items() 
+                 if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key.lower(), value)
+
+    def load(self):
+        return self.application
 
 def run_flask():
-    """Run Flask webhook server in a separate process"""
-    app = Flask(__name__)
-    
-    @app.route('/trakteer_webhook', methods=['POST'])
-    def handle_trakteer_webhook():
-        try:
-            incoming_secret = request.headers.get('X-Trakteer-Secret')
-            if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
-                return jsonify({"status": "unauthorized"}), 401
-            
-            data = request.get_json()
-            if data.get('status') == 'paid':
-                package_id = data.get('package_sku')
-                customer_email = data.get('customer', {}).get('email', '')
-                
-                if customer_email and customer_email.endswith('@vipbot.com'):
-                    user_id = customer_email.split('@')[0]
-                    if package_id in TRAKTEER_PACKAGE_MAPPING:
-                        update_vip_status(user_id, package_id)
-                        return jsonify({"status": "success"}), 200
-            
-            return jsonify({"status": "ignored"}), 200
-        except Exception as e:
-            logger.error(f"Webhook error: {e}")
-            return jsonify({"status": "error"}), 500
-    
-    # Use Gunicorn for production
-    from gunicorn.app.base import BaseApplication
-    
-    class FlaskApplication(BaseApplication):
-        def __init__(self, app, options=None):
-            self.options = options or {}
-            self.application = app
-            super().__init__()
-
-        def load_config(self):
-            config = {key: value for key, value in self.options.items() 
-                     if key in self.cfg.settings and value is not None}
-            for key, value in config.items():
-                self.cfg.set(key.lower(), value)
-
-        def load(self):
-            return self.application
-
+    """Run Flask with Gunicorn"""
     options = {
         'bind': '0.0.0.0:5000',
         'workers': 1,
@@ -647,50 +599,43 @@ def run_flask():
     }
     FlaskApplication(app, options).run()
 
+# ===== TELEGRAM BOT SETUP =====
+application = Application.builder().token(BOT_TOKEN).build()
+
+# Register handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("health", health_check))
+application.add_handler(CommandHandler("vip", vip))
+application.add_handler(CommandHandler("status", status))
+application.add_handler(CommandHandler("gratis", gratis))
+application.add_handler(CommandHandler("vip_episode", vip_episode))
+application.add_handler(CommandHandler("generate_link", generate_film_links))
+application.add_handler(CallbackQueryHandler(button_handler))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
 async def run_bot():
-    """Run Telegram bot with proper async handling"""
-    application = Application.builder() \
-        .token(BOT_TOKEN) \
-        .post_init(post_init) \
-        .build()
-
-    # [KEEP ALL YOUR EXISTING HANDLER REGISTRATIONS]
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("health", health_check))
-    application.add_handler(CommandHandler("vip", vip))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("gratis", gratis))
-    application.add_handler(CommandHandler("vip_episode", vip_episode))
-    application.add_handler(CommandHandler("generate_link", generate_film_links))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    await application.run_webhook(
+    """Run Telegram bot"""
+    await application.initialize()
+    await application.start()
+    logger.info("Bot started")
+    await application.updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=WEBHOOK_URL,
         url_path=BOT_TOKEN,
-        cert=None,
+        webhook_url=WEBHOOK_URL,
         drop_pending_updates=True
     )
+    await application.bot.set_webhook(WEBHOOK_URL)
+    logger.info(f"Webhook set to: {WEBHOOK_URL}")
 
-def start_bot():
-    """Start the bot in a new event loop"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_bot())
-
+# ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Start Flask in a separate process
-    flask_process = Process(target=run_flask)
-    flask_process.daemon = True
-    flask_process.start()
+    # Start Flask in a separate thread
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
 
-    # Start Telegram bot in main process
-    start_bot()
-
-
-
-
-
-
+    # Start Telegram bot
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_bot())
+    loop.run_forever()

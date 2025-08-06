@@ -17,7 +17,7 @@ from telegram.ext import (
 )
 from oauth2client.service_account import ServiceAccountCredentials
 import asyncio
-from threading import Thread
+from multiprocessing import Process
 from flask import Flask, request, jsonify
 
 # ===== KONFIGURASI =====
@@ -596,7 +596,7 @@ async def run_bot():
     )
 
 def run_flask():
-    """Run Flask webhook server in a separate thread"""
+    """Run Flask webhook server in a separate process"""
     app = Flask(__name__)
     
     @app.route('/trakteer_webhook', methods=['POST'])
@@ -622,7 +622,30 @@ def run_flask():
             logger.error(f"Webhook error: {e}")
             return jsonify({"status": "error"}), 500
     
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    # Use Gunicorn for production
+    from gunicorn.app.base import BaseApplication
+    
+    class FlaskApplication(BaseApplication):
+        def __init__(self, app, options=None):
+            self.options = options or {}
+            self.application = app
+            super().__init__()
+
+        def load_config(self):
+            config = {key: value for key, value in self.options.items() 
+                     if key in self.cfg.settings and value is not None}
+            for key, value in config.items():
+                self.cfg.set(key.lower(), value)
+
+        def load(self):
+            return self.application
+
+    options = {
+        'bind': '0.0.0.0:5000',
+        'workers': 1,
+        'timeout': 120
+    }
+    FlaskApplication(app, options).run()
 
 async def run_bot():
     """Run Telegram bot with proper async handling"""
@@ -658,14 +681,13 @@ def start_bot():
     loop.run_until_complete(run_bot())
 
 if __name__ == "__main__":
-    # Start Flask in a separate thread
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
+    # Start Flask in a separate process
+    flask_process = Process(target=run_flask)
+    flask_process.daemon = True
+    flask_process.start()
 
-    # Start Telegram bot in main thread
+    # Start Telegram bot in main process
     start_bot()
-
-
 
 
 

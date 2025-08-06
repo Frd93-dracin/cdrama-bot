@@ -655,9 +655,9 @@ async def run_bot():
 
 
 response = requests.get(
-    f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+    f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
     params={
-        'url': f"{WEBHOOK_URL}/{TOKEN}",
+        'url': f"{WEBHOOK_URL}/{BOT_TOKEN}",
         'drop_pending_updates': True
     }
 )
@@ -692,6 +692,7 @@ if __name__ == "__main__":
     # loop.run_forever()
 
     run_flask()
+
 
 
 

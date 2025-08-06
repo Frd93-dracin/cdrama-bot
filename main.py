@@ -6,7 +6,6 @@ import time
 import base64
 import sys
 print("Python version:", sys.version)
-print("Flask version:", flask.__version__)
 print("Werkzeug version:", werkzeug.__version__)
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -647,5 +646,6 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run_bot())
     loop.run_forever()
+
 
 

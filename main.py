@@ -700,7 +700,19 @@ def setup_webhook():
         logger.error(f"🔥 Failed to set webhook: {e}")
         return {"error": str(e)}
 
-        
+@app.post(f"/{BOT_TOKEN}")
+async def webhook(request: Request):
+    payload = await request.json()
+    update = Update.de_json(payload, bot)
+
+    if update.message:
+        await handle_message(update.message)
+    elif update.callback_query:
+        await handle_callback(update.callback_query)
+
+    return {"ok": True}
+
+
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     # 1. Delete old webhook
@@ -713,6 +725,7 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
             debug=False)
+
 
 
 

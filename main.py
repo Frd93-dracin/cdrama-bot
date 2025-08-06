@@ -29,7 +29,7 @@ try:
     from werkzeug.urls import url_quote  # Untuk Flask < 2.0
 except ImportError:
     from werkzeug.utils import quote as url_quote  # Untuk Flask >= 2.0
-
+start_time = datetime.now()
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
@@ -608,6 +608,18 @@ def run_flask():
     }
     FlaskApplication(app, options).run()
 
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk command /health"""
+    try:
+        await update.message.reply_text(
+            "✅ Bot is running!\n"
+            f"Python version: {sys.version.split()[0]}\n"
+            f"Uptime: {datetime.now() - start_time}"
+        )
+    except Exception as e:
+        logging.error(f"Health check error: {e}")
+        await update.message.reply_text("⚠️ Bot is running but with some issues")
+
 # ===== TELEGRAM BOT SETUP =====
 application = Application.builder().token(BOT_TOKEN).build()
 
@@ -648,6 +660,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(run_bot())
     loop.run_forever()
+
 
 
 

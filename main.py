@@ -596,10 +596,10 @@ async def run_bot():
     )
 
 def run_flask():
-    """Run Flask webhook server"""
-    webhook_app = Flask(__name__)
+    """Run Flask webhook server in a separate thread"""
+    app = Flask(__name__)
     
-    @webhook_app.route('/trakteer_webhook', methods=['POST'])
+    @app.route('/trakteer_webhook', methods=['POST'])
     def handle_trakteer_webhook():
         try:
             incoming_secret = request.headers.get('X-Trakteer-Secret')
@@ -622,16 +622,48 @@ def run_flask():
             logger.error(f"Webhook error: {e}")
             return jsonify({"status": "error"}), 500
     
-    webhook_app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
+
+async def run_bot():
+    """Run Telegram bot with proper async handling"""
+    application = Application.builder() \
+        .token(BOT_TOKEN) \
+        .post_init(post_init) \
+        .build()
+
+    # [KEEP ALL YOUR EXISTING HANDLER REGISTRATIONS]
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("health", health_check))
+    application.add_handler(CommandHandler("vip", vip))
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("gratis", gratis))
+    application.add_handler(CommandHandler("vip_episode", vip_episode))
+    application.add_handler(CommandHandler("generate_link", generate_film_links))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        url_path=BOT_TOKEN,
+        cert=None,
+        drop_pending_updates=True
+    )
+
+def start_bot():
+    """Start the bot in a new event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_bot())
 
 if __name__ == "__main__":
     # Start Flask in a separate thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
+    flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     # Start Telegram bot in main thread
-    asyncio.run(run_bot())
+    start_bot()
 
 
 

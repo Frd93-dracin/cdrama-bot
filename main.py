@@ -678,15 +678,14 @@ print(response.json())  # Cek response
 # Fix 3: Proper webhook setup function
 def setup_webhook():
     try:
-        # PASTIKAN HANYA ADA 1 TOKEN DI URL
-        webhook_url = f"https://cdrama-bot.onrender.com/{BOT_TOKEN}"
-        
+        webhook_url = f"https://cdrama-bot.onrender.com/{BOT_TOKEN}"  # INI BENAR
+
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
-        
+
         response = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",  # BENAR
             json={
-                'url': webhook_url,
+                'url': webhook_url,  # JANGAN tambahkan token lagi di sini!
                 'drop_pending_updates': True,
                 'allowed_updates': ["message", "callback_query"]
             }
@@ -700,6 +699,7 @@ def setup_webhook():
     except Exception as e:
         logger.error(f"🔥 Failed to set webhook: {e}")
         return {"error": str(e)}
+
         
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
@@ -713,6 +713,7 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', 
             port=int(os.getenv('PORT', 5000)),
             debug=False)
+
 
 
 

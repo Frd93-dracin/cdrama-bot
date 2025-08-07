@@ -556,24 +556,16 @@ def telegram_webhook():
         try:
             # Log request
             logger.info(f"📩 Incoming update: {request.json}")
-            
             update = Update.de_json(request.json, application.bot)
-            
-            # Process update in background
-            def process_update():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
 
-                async def handle():
-                    await application.initialize()  # <-- Tambah ini!
-                    await application.process_update(update)
+            async def handle():
+                await application.initialize()
+                await application.process_update(update)
 
-                loop.run_until_complete(handle())
-                loop.close()
-            
-            Thread(target=process_update).start()
+            asyncio.run(handle())  # <- Jalankan async secara langsung & aman
+
             return '', 200
-            
+
         except Exception as e:
             logger.error(f"Error processing update: {e}")
             return '', 200
@@ -715,6 +707,7 @@ if __name__ == "__main__":
      #   port=int(os.environ.get("PORT", 8443)),
       #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
     #)
+
 
 
 

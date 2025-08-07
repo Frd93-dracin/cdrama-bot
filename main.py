@@ -534,6 +534,19 @@ def get_film_info(film_code):
         return None
     return safe_sheets_operation(operation)
 
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk command /health"""
+    try:
+        await update.message.reply_text(
+            "✅ Bot is running!\n"
+            f"Python version: {sys.version.split()[0]}\n"
+            f"Uptime: {datetime.now() - start_time}"
+        )
+    except Exception as e:
+        logging.error(f"Health check error: {e}")
+        await update.message.reply_text("⚠️ Bot is running but with some issues")
+
+
 def encode_film_code(film_code, part):
     """Encode kode film untuk URL"""
     return base64.urlsafe_b64encode(f"{film_code}_{part}".encode()).decode()
@@ -607,3 +620,4 @@ if __name__ == "__main__":
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
         secret_token='WEBHOOK_SECRET_TOKEN'
     )
+

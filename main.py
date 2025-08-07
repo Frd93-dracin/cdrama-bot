@@ -563,7 +563,12 @@ def telegram_webhook():
             def process_update():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(application.process_update(update))
+
+                async def handle():
+                    await application.initialize()  # <-- Tambah ini!
+                    await application.process_update(update)
+
+                loop.run_until_complete(handle())
                 loop.close()
             
             Thread(target=process_update).start()
@@ -573,6 +578,7 @@ def telegram_webhook():
             logger.error(f"Error processing update: {e}")
             return '', 200
     return 'Method Not Allowed', 405
+
 
 @app.route('/trakteer_webhook', methods=['POST'])
 def trakteer_webhook():
@@ -709,6 +715,7 @@ if __name__ == "__main__":
      #   port=int(os.environ.get("PORT", 8443)),
       #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
     #)
+
 
 
 

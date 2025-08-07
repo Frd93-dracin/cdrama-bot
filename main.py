@@ -554,22 +554,18 @@ app = Flask(__name__)
 def telegram_webhook():
     if request.method == "POST":
         try:
-            # Log request
             logger.info(f"📩 Incoming update: {request.json}")
             update = Update.de_json(request.json, application.bot)
 
-            async def handle():
-                await application.initialize()
-                await application.process_update(update)
-
-            asyncio.run(handle())  # <- Jalankan async secara langsung & aman
+            # Masukkan update ke queue (tanpa bikin event loop baru)
+            application.update_queue.put(update)
 
             return '', 200
-
         except Exception as e:
             logger.error(f"Error processing update: {e}")
             return '', 200
     return 'Method Not Allowed', 405
+
 
 
 @app.route('/trakteer_webhook', methods=['POST'])
@@ -707,6 +703,7 @@ if __name__ == "__main__":
      #   port=int(os.environ.get("PORT", 8443)),
       #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
     #)
+
 
 
 

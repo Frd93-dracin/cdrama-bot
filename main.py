@@ -557,8 +557,11 @@ def telegram_webhook():
             logger.info(f"📩 Incoming update: {request.json}")
             update = Update.de_json(request.json, application.bot)
 
-            # Masukkan update ke queue (tanpa bikin event loop baru)
-            application.update_queue.put(update)
+            # Masukkan update ke queue secara async-safety
+            asyncio.run_coroutine_threadsafe(
+                application.update_queue.put(update),
+                application.loop
+            )
 
             return '', 200
         except Exception as e:
@@ -703,6 +706,7 @@ if __name__ == "__main__":
      #   port=int(os.environ.get("PORT", 8443)),
       #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
     #)
+
 
 
 

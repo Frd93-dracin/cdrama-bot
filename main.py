@@ -27,11 +27,6 @@ from telegram.ext import (
 )
 from oauth2client.service_account import ServiceAccountCredentials
 
-from gunicorn.app.base import BaseApplication
-try:
-    from werkzeug.urls import url_quote  # Untuk Flask < 2.0
-except ImportError:
-    from werkzeug.utils import quote as url_quote  # Untuk Flask >= 2.0
 start_time = datetime.now()
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -547,92 +542,6 @@ def decode_film_code(encoded_str):
     """Decode kode film dari URL"""
     return base64.urlsafe_b64decode(encoded_str.encode()).decode().split("_")
 
-# ===== FLASK SERVER =====
-app = Flask(__name__)
-
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def telegram_webhook():
-    if request.method == "POST":
-        try:
-            logger.info(f"📩 Incoming update: {request.json}")
-            update = Update.de_json(request.json, application.bot)
-
-            # Gunakan global event_loop
-            asyncio.run_coroutine_threadsafe(
-                application.update_queue.put(update),
-                event_loop
-            )
-
-            return '', 200
-        except Exception as e:
-            logger.error(f"Error processing update: {e}")
-            return '', 200
-    return 'Method Not Allowed', 405
-
-
-
-
-@app.route('/trakteer_webhook', methods=['POST'])
-def trakteer_webhook():
-    """Handle Trakteer webhook"""
-    try:
-        incoming_secret = request.headers.get('X-Trakteer-Secret')
-        if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
-            return jsonify({"status": "unauthorized"}), 401
-        
-        data = request.get_json()
-        if data.get('status') == 'paid':
-            package_id = data.get('package_sku')
-            customer_email = data.get('customer', {}).get('email', '')
-            
-            if customer_email and customer_email.endswith('@vipbot.com'):
-                user_id = customer_email.split('@')[0]
-                if package_id in TRAKTEER_PACKAGE_MAPPING:
-                    update_vip_status(user_id, package_id)
-                    return jsonify({"status": "success"}), 200
-        
-        return jsonify({"status": "ignored"}), 200
-    except Exception as e:
-        logger.error(f"Trakteer webhook error: {e}")
-        return jsonify({"status": "error"}), 500
-
-class FlaskApplication(BaseApplication):
-    """Gunicorn Flask wrapper"""
-    def __init__(self, app, options=None):
-        self.options = options or {}
-        self.application = app
-        super().__init__()
-
-    def load_config(self):
-        config = {key: value for key, value in self.options.items() 
-                 if key in self.cfg.settings and value is not None}
-        for key, value in config.items():
-            self.cfg.set(key.lower(), value)
-
-    def load(self):
-        return self.application
-
-def run_flask():
-    """Run Flask with Gunicorn"""
-    options = {
-        'bind': '0.0.0.0:5000',
-        'workers': 1,
-        'timeout': 120
-    }
-    FlaskApplication(app, options).run()
-
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk command /health"""
-    try:
-        await update.message.reply_text(
-            "✅ Bot is running!\n"
-            f"Python version: {sys.version.split()[0]}\n"
-            f"Uptime: {datetime.now() - start_time}"
-        )
-    except Exception as e:
-        logging.error(f"Health check error: {e}")
-        await update.message.reply_text("⚠️ Bot is running but with some issues")
-
 # ===== TELEGRAM BOT SETUP =====
 application = Application.builder().token(BOT_TOKEN).build()
 
@@ -647,29 +556,18 @@ application.add_handler(CommandHandler("generate_link", generate_film_links))
 application.add_handler(CallbackQueryHandler(button_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-response = requests.get(
-    f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
-    params={
-        'url': f"{WEBHOOK_URL}/{BOT_TOKEN}",
-        'drop_pending_updates': True
-    }
-)
-
-print(response.json())  # Cek response
-
-# Fix 3: Proper webhook setup function
 def setup_webhook():
     try:
-        webhook_url = f"https://cdrama-bot.onrender.com/{BOT_TOKEN}"  # INI BENAR
-
+        webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
         response = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",  # BENAR
+            f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
-                'url': webhook_url,  # JANGAN tambahkan token lagi di sini!
+                'url': webhook_url,
                 'drop_pending_updates': True,
-                'allowed_updates': ["message", "callback_query"]
+                'allowed_updates': ["message", "callback_query"],
+                'secret_token': 'WEBHOOK_SECRET_TOKEN'
             }
         )
         result = response.json()
@@ -682,49 +580,30 @@ def setup_webhook():
         logger.error(f"🔥 Failed to set webhook: {e}")
         return {"error": str(e)}
 
-@app.post(f"/{BOT_TOKEN}")
-async def webhook(request: Request):
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk command /health"""
     try:
-        payload = await request.json()
-        update = Update.de_json(payload, application.bot)
-        await application.process_update(update)
-        return {"ok": True}
+        await update.message.reply_text(
+            "✅ Bot is running!\n"
+            f"Python version: {sys.version.split()[0]}\n"
+            f"Uptime: {datetime.now() - start_time}"
+        )
     except Exception as e:
-        logger.error(f"Webhook processing failed: {e}")
-        return {"ok": False}
+        logging.error(f"Health check error: {e}")
+        await update.message.reply_text("⚠️ Bot is running but with some issues")
 
-event_loop = None
+# ===== MAIN EXECUTION =====
+if __name__ == "__main__":
+    # 1. Delete old webhook (optional)
+    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
 
-def run_bot():
-    global event_loop
-    event_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(event_loop)
-    
+    # 2. Setup webhook baru
+    setup_webhook()
+
+    # 3. Jalankan aplikasi
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_path=f"/{BOT_TOKEN}",
-        webhook_url=f"https://{YOUR_DOMAIN}/{BOT_TOKEN}"
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        secret_token='WEBHOOK_SECRET_TOKEN'
     )
-# ===== MAIN EXECUTION =====
-if __name__ == "__main__":
-    import requests
-
-    # 1. Delete old webhook (optional, tapi bagus untuk reset)
-    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-
-    # 2. Jalankan webhook dari python-telegram-bot
-    #application.run_webhook(
-    #    listen="0.0.0.0",
-     #   port=int(os.environ.get("PORT", 8443)),
-      #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
-    #)
-
-
-
-
-
-
-
-
-

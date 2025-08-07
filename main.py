@@ -686,15 +686,14 @@ def setup_webhook():
 
 @app.post(f"/{BOT_TOKEN}")
 async def webhook(request: Request):
-    payload = await request.json()
-    update = Update.de_json(payload, bot)
-
-    if update.message:
-        await handle_message(update.message)
-    elif update.callback_query:
-        await handle_callback(update.callback_query)
-
-    return {"ok": True}
+    try:
+        payload = await request.json()
+        update = Update.de_json(payload, application.bot)
+        await application.process_update(update)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Webhook processing failed: {e}")
+        return {"ok": False}
 
 
 # ===== MAIN EXECUTION =====
@@ -705,11 +704,12 @@ if __name__ == "__main__":
     requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
 
     # 2. Jalankan webhook dari python-telegram-bot
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
-    )
+    #application.run_webhook(
+    #    listen="0.0.0.0",
+     #   port=int(os.environ.get("PORT", 8443)),
+      #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+    #)
+
 
 
 

@@ -606,18 +606,9 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Bot is running but with some issues")
 
 # ===== MAIN EXECUTION =====
+# ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # 1. Delete old webhook (optional)
-    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+    import asyncio
+    asyncio.run(application.run_polling())
 
-    # 2. Setup webhook baru
-    setup_webhook()
-
-    # 3. Jalankan aplikasi
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
-        secret_token='WEBHOOK_SECRET_TOKEN'
-    )
 

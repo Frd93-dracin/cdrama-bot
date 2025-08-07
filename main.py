@@ -557,10 +557,10 @@ def telegram_webhook():
             logger.info(f"📩 Incoming update: {request.json}")
             update = Update.de_json(request.json, application.bot)
 
-            # Masukkan update ke queue secara async-safety
+            # Gunakan global event_loop
             asyncio.run_coroutine_threadsafe(
                 application.update_queue.put(update),
-                application.loop
+                event_loop
             )
 
             return '', 200
@@ -568,6 +568,7 @@ def telegram_webhook():
             logger.error(f"Error processing update: {e}")
             return '', 200
     return 'Method Not Allowed', 405
+
 
 
 
@@ -692,7 +693,19 @@ async def webhook(request: Request):
         logger.error(f"Webhook processing failed: {e}")
         return {"ok": False}
 
+event_loop = None
 
+def run_bot():
+    global event_loop
+    event_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(event_loop)
+    
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_path=f"/{BOT_TOKEN}",
+        webhook_url=f"https://{YOUR_DOMAIN}/{BOT_TOKEN}"
+    )
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     import requests
@@ -706,6 +719,7 @@ if __name__ == "__main__":
      #   port=int(os.environ.get("PORT", 8443)),
       #  webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
     #)
+
 
 
 

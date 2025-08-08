@@ -570,7 +570,12 @@ async def ping_server(context: CallbackContext):
         logger.error(f"Gagal ping server: {e}")
 
 # ===== TELEGRAM BOT SETUP =====
-application = Application.builder().token(BOT_TOKEN).build()
+application = (
+    Application.builder()
+    .token(BOT_TOKEN)
+    .job_queue(JobQueue())
+    .build()
+)
 
 # Register handlers
 application.add_handler(CommandHandler("start", start))
@@ -621,30 +626,29 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # 1. Setup job queue untuk maintenance tasks
+    # 1. Setup maintenance jobs
     job_queue = application.job_queue
-    
-    # Jalankan keep_alive setiap 10 menit (600 detik)
-    job_queue.run_repeating(
-        keep_alive,
-        interval=600,
-        first=10
-    )
-    
-    # Jalankan ping_server setiap 5 menit (300 detik)
-    job_queue.run_repeating(
-        ping_server,
-        interval=300,
-        first=5
-    )
+    if job_queue:
+        job_queue.run_repeating(
+            keep_alive,
+            interval=600,
+            first=10
+        )
+        job_queue.run_repeating(
+            ping_server,
+            interval=300,
+            first=5
+        )
+    else:
+        logger.warning("JobQueue not available - periodic tasks disabled")
 
-    # 2. Hapus webhook lama (optional)
+    # 2. Delete old webhook
     requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
 
-    # 3. Setup webhook baru
+    # 3. Setup new webhook
     setup_webhook()
 
-    # 4. Jalankan aplikasi
+    # 4. Run application
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,

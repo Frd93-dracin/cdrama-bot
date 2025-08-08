@@ -630,20 +630,6 @@ def setup_webhook():
         
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Hapus webhook lama
-    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-    
-    # Coba jalankan dengan webhook
-    try:
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
-            drop_pending_updates=True
-        )
-    except Exception as e:
-        logger.error(f"Webhook error: {e}, falling back to polling")
-        # Fallback ke polling jika webhook gagal
-        application.run_polling()
+    application.run_polling()
 
 

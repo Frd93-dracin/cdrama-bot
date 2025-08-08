@@ -23,7 +23,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
     CallbackQueryHandler,
-    CallbackContext
+    CallbackContext,
+    JobQueue
 )
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -555,6 +556,19 @@ def decode_film_code(encoded_str):
     """Decode kode film dari URL"""
     return base64.urlsafe_b64decode(encoded_str.encode()).decode().split("_")
 
+async def keep_alive(context: CallbackContext):
+    """Refresh koneksi secara berkala"""
+    logger.info("♻️ Memperbarui koneksi...")
+    refresh_connection()
+    
+async def ping_server(context: CallbackContext):
+    """Ping server untuk menjaga agar tetap aktif"""
+    try:
+        requests.get(f"{WEBHOOK_URL}")
+        logger.info("🏓 Ping server berhasil")
+    except Exception as e:
+        logger.error(f"Gagal ping server: {e}")
+
 # ===== TELEGRAM BOT SETUP =====
 application = Application.builder().token(BOT_TOKEN).build()
 
@@ -606,22 +620,36 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Bot is running but with some issues")
 
 # ===== MAIN EXECUTION =====
-# ===== MAIN EXECUTION =====
-# ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    import os
-    PORT = int(os.environ.get("PORT", 5000))
-    WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://cdrama-bot.onrender.com")
+    # 1. Setup job queue untuk maintenance tasks
+    job_queue = application.job_queue
+    
+    # Jalankan keep_alive setiap 10 menit (600 detik)
+    job_queue.run_repeating(
+        keep_alive,
+        interval=600,
+        first=10
+    )
+    
+    # Jalankan ping_server setiap 5 menit (300 detik)
+    job_queue.run_repeating(
+        ping_server,
+        interval=300,
+        first=5
+    )
 
-    # Hapus webhook lama
+    # 2. Hapus webhook lama (optional)
     requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
 
-    # Set webhook baru langsung
+    # 3. Setup webhook baru
+    setup_webhook()
+
+    # 4. Jalankan aplikasi
     application.run_webhook(
-        listen="0.0.0.0",              # Agar bisa diakses dari luar
-        port=PORT,                     # Port sesuai Render
-        url_path=BOT_TOKEN,            # Path webhook (wajib token)
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        secret_token='WEBHOOK_SECRET_TOKEN'
     )
 
 

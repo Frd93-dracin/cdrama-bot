@@ -577,13 +577,12 @@ async def keep_alive(context: CallbackContext):
     
 async def ping_server(context: CallbackContext):
     try:
-        # Gunakan endpoint yang lebih ringan
-        response = session.get(f"{WEBHOOK_URL}/healthz", timeout=5)
+        # Gunakan session dengan timeout pendek
+        response = requests.get(f"{WEBHOOK_URL}/healthz", timeout=3)
         logger.info(f"🏓 Ping successful - Status: {response.status_code}")
     except Exception as e:
-        logger.error(f"Ping failed: {str(e)}")
-        # Coba refresh webhook
-        setup_webhook()
+        logger.warning(f"Ping failed: {str(e)}")
+        # Tidak perlu refresh webhook otomatis
         
 # ===== TELEGRAM BOT SETUP =====
 application = (
@@ -621,16 +620,12 @@ def setup_webhook():
         webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
-        # Gunakan session yang sudah di-configure
-        response = session.post(
+        response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
                 'url': webhook_url,
                 'drop_pending_updates': True,
-                'allowed_updates': Update.ALL_TYPES,
-                'secret_token': 'WEBHOOK_SECRET_TOKEN',
-                'max_connections': 40,
-                'ip_address': '216.24.57.7'  # IP Render.com
+                'secret_token': 'WEBHOOK_SECRET_TOKEN'
             },
             timeout=10
         )
@@ -649,44 +644,46 @@ async def health_check():
     return {
         "status": "ok",
         "bot": "running",
-        "time": datetime.now().isoformat(),
-        "uptime": str(datetime.now() - start_time)
+        "time": datetime.now().isoformat()
     }
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Jalankan health server di port 8000
-    Thread(target=lambda: uvicorn.run(health_app, host="0.0.0.0", port=8000), daemon=True).start()
+    # 1. Import uvicorn di dalam main
+    import uvicorn
+    
+    # 2. Jalankan health server
+    def run_health_server():
+        uvicorn.run(health_app, host="0.0.0.0", port=8000, log_level="warning")
+    
+    Thread(target=run_health_server, daemon=True).start()
 
-    # Setup job queue
+    # 3. Setup job queue
     try:
         application.job_queue.run_repeating(keep_alive, interval=600, first=10)
         application.job_queue.run_repeating(ping_server, interval=300, first=5)
     except Exception as e:
         logger.error(f"JobQueue error: {str(e)}")
 
-    # Setup webhook dengan retry
-    for attempt in range(3):
-        try:
-            setup_webhook()
-            break
-        except Exception as e:
-            logger.error(f"Attempt {attempt+1} failed: {str(e)}")
-            time.sleep(5)
-
-    # Run application dengan timeout yang lebih longgar
+    # 4. Setup webhook
     try:
+        # Pastikan webhook dihapus dulu
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+        
+        # Setup webhook baru
+        setup_webhook()
+        
+        # 5. Run application (tanpa parameter http_version)
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
             secret_token='WEBHOOK_SECRET_TOKEN',
-            drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES,
-            http_version='1.1',
-            timeout=30
+            drop_pending_updates=True
         )
     except Exception as e:
         logger.critical(f"Failed to run webhook: {str(e)}")
+        # Pastikan webhook dihapus sebelum fallback ke polling
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
         logger.info("Falling back to polling...")
         application.run_polling()
 

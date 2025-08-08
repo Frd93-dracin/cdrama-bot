@@ -572,8 +572,11 @@ def decode_film_code(encoded_str):
 
 async def keep_alive(context: CallbackContext):
     """Refresh koneksi secara berkala"""
-    logger.info("♻️ Memperbarui koneksi...")
-    refresh_connection()
+    try:
+        refresh_connection()
+        logger.info("✅ Koneksi diperbarui")
+    except Exception as e:
+        logger.error(f"Gagal refresh koneksi: {e}")
     
 async def ping_server(context: CallbackContext):
     try:
@@ -585,18 +588,7 @@ async def ping_server(context: CallbackContext):
         # Tidak perlu refresh webhook otomatis
         
 # ===== TELEGRAM BOT SETUP =====
-application = (
-    Application.builder()
-    .token(BOT_TOKEN)
-    .concurrent_updates(True)
-    .http_version('1.1')
-    .get_updates_http_version('1.1')
-    .pool_timeout(30)
-    .connect_timeout(30)
-    .read_timeout(30)
-    .write_timeout(30)
-    .build()
-)
+application = Application.builder().token(BOT_TOKEN).build()
 
 # Inisialisasi JobQueue secara terpisah
 job_queue = application.job_queue
@@ -636,58 +628,22 @@ def setup_webhook():
         logger.error(f"🔥 Failed to set webhook: {str(e)}")
         return {"error": str(e)}
         
-from fastapi import FastAPI
-health_app = FastAPI()
-
-@health_app.get("/healthz")
-async def health_check():
-    return {
-        "status": "ok",
-        "bot": "running",
-        "time": datetime.now().isoformat()
-    }
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # 1. Import uvicorn di dalam main
-    import uvicorn
+    # Hapus webhook lama
+    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
     
-    # 2. Jalankan health server
-    def run_health_server():
-        uvicorn.run(health_app, host="0.0.0.0", port=8000, log_level="warning")
-    
-    Thread(target=run_health_server, daemon=True).start()
-
-    # 3. Setup job queue
+    # Coba jalankan dengan webhook
     try:
-        application.job_queue.run_repeating(keep_alive, interval=600, first=10)
-        application.job_queue.run_repeating(ping_server, interval=300, first=5)
-    except Exception as e:
-        logger.error(f"JobQueue error: {str(e)}")
-
-    # 4. Setup webhook
-    try:
-        # Pastikan webhook dihapus dulu
-        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-        
-        # Setup webhook baru
-        setup_webhook()
-        
-        # 5. Run application (tanpa parameter http_version)
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
-            secret_token='WEBHOOK_SECRET_TOKEN',
             drop_pending_updates=True
         )
     except Exception as e:
-        logger.critical(f"Failed to run webhook: {str(e)}")
-        # Pastikan webhook dihapus sebelum fallback ke polling
-        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-        logger.info("Falling back to polling...")
+        logger.error(f"Webhook error: {e}, falling back to polling")
+        # Fallback ke polling jika webhook gagal
         application.run_polling()
-
-
-
 
 

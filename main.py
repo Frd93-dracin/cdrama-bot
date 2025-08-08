@@ -630,12 +630,11 @@ def setup_webhook():
         
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Hanya gunakan polling
-    logger.info("Starting bot in polling mode...")
     application.run_polling(
         drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
+        close_loop=False  # Biarkan Render.com mengatur lifecycle
     )
+
 
 
 

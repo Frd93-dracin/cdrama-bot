@@ -28,6 +28,20 @@ from telegram.ext import (
 )
 from oauth2client.service_account import ServiceAccountCredentials
 
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+session = requests.Session()
+retry = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[500, 502, 503, 504]
+)
+adapter = HTTPAdapter(max_retries=retry)
+session.mount('http://', adapter)
+session.mount('https://', adapter)
+
 start_time = datetime.now()
 # ===== KONFIGURASI =====
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -562,18 +576,26 @@ async def keep_alive(context: CallbackContext):
     refresh_connection()
     
 async def ping_server(context: CallbackContext):
-    """Ping server untuk menjaga agar tetap aktif"""
     try:
-        requests.get(f"{WEBHOOK_URL}")
-        logger.info("🏓 Ping server berhasil")
+        # Gunakan endpoint yang lebih ringan
+        response = session.get(f"{WEBHOOK_URL}/healthz", timeout=5)
+        logger.info(f"🏓 Ping successful - Status: {response.status_code}")
     except Exception as e:
-        logger.error(f"Gagal ping server: {e}")
-
+        logger.error(f"Ping failed: {str(e)}")
+        # Coba refresh webhook
+        setup_webhook()
+        
 # ===== TELEGRAM BOT SETUP =====
 application = (
     Application.builder()
     .token(BOT_TOKEN)
-    .concurrent_updates(True)  # Tambahkan ini untuk handle concurrent requests
+    .concurrent_updates(True)
+    .http_version('1.1')
+    .get_updates_http_version('1.1')
+    .pool_timeout(30)
+    .connect_timeout(30)
+    .read_timeout(30)
+    .write_timeout(30)
     .build()
 )
 
@@ -599,73 +621,75 @@ def setup_webhook():
         webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
-        response = requests.post(
+        # Gunakan session yang sudah di-configure
+        response = session.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
                 'url': webhook_url,
                 'drop_pending_updates': True,
-                'allowed_updates': ["message", "callback_query"],
-                'secret_token': 'WEBHOOK_SECRET_TOKEN'
-            }
+                'allowed_updates': Update.ALL_TYPES,
+                'secret_token': 'WEBHOOK_SECRET_TOKEN',
+                'max_connections': 40,
+                'ip_address': '216.24.57.7'  # IP Render.com
+            },
+            timeout=10
         )
         result = response.json()
-        if not result.get('ok'):
-            logger.error(f"❌ Webhook setup failed: {result}")
-        else:
-            logger.info(f"✅ Webhook setup success: {result}")
+        logger.info(f"Webhook setup result: {result}")
         return result
     except Exception as e:
-        logger.error(f"🔥 Failed to set webhook: {e}")
+        logger.error(f"🔥 Failed to set webhook: {str(e)}")
         return {"error": str(e)}
+        
+from fastapi import FastAPI
+health_app = FastAPI()
 
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk command /health"""
-    try:
-        await update.message.reply_text(
-            "✅ Bot is running!\n"
-            f"Python version: {sys.version.split()[0]}\n"
-            f"Uptime: {datetime.now() - start_time}"
-        )
-    except Exception as e:
-        logging.error(f"Health check error: {e}")
-        await update.message.reply_text("⚠️ Bot is running but with some issues")
-
+@health_app.get("/healthz")
+async def health_check():
+    return {
+        "status": "ok",
+        "bot": "running",
+        "time": datetime.now().isoformat(),
+        "uptime": str(datetime.now() - start_time)
+    }
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # 1. Setup maintenance jobs
-    try:
-        job_queue.run_repeating(
-            keep_alive,
-            interval=600,
-            first=10
-        )
-        job_queue.run_repeating(
-            ping_server,
-            interval=300,
-            first=5
-        )
-        logger.info("JobQueue berhasil diinisialisasi")
-    except Exception as e:
-        logger.error(f"Gagal setup JobQueue: {e}")
+    # Jalankan health server di port 8000
+    Thread(target=lambda: uvicorn.run(health_app, host="0.0.0.0", port=8000), daemon=True).start()
 
-    # 2. Setup webhook
+    # Setup job queue
     try:
-        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-        setup_webhook()
-        
-        # 3. Run application
+        application.job_queue.run_repeating(keep_alive, interval=600, first=10)
+        application.job_queue.run_repeating(ping_server, interval=300, first=5)
+    except Exception as e:
+        logger.error(f"JobQueue error: {str(e)}")
+
+    # Setup webhook dengan retry
+    for attempt in range(3):
+        try:
+            setup_webhook()
+            break
+        except Exception as e:
+            logger.error(f"Attempt {attempt+1} failed: {str(e)}")
+            time.sleep(5)
+
+    # Run application dengan timeout yang lebih longgar
+    try:
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
             secret_token='WEBHOOK_SECRET_TOKEN',
             drop_pending_updates=True,
-            allowed_updates=Update.ALL_TYPES
+            allowed_updates=Update.ALL_TYPES,
+            http_version='1.1',
+            timeout=30
         )
     except Exception as e:
-        logger.error(f"Error saat menjalankan bot: {e}")
-        # Fallback ke polling jika webhook gagal
+        logger.critical(f"Failed to run webhook: {str(e)}")
+        logger.info("Falling back to polling...")
         application.run_polling()
+
 
 
 

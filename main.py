@@ -573,9 +573,15 @@ async def ping_server(context: CallbackContext):
 application = (
     Application.builder()
     .token(BOT_TOKEN)
-    .job_queue(JobQueue())
+    .concurrent_updates(True)  # Tambahkan ini untuk handle concurrent requests
     .build()
 )
+
+# Inisialisasi JobQueue secara terpisah
+job_queue = application.job_queue
+if job_queue is None:
+    job_queue = JobQueue()
+    application.job_queue = job_queue
 
 # Register handlers
 application.add_handler(CommandHandler("start", start))
@@ -627,8 +633,7 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     # 1. Setup maintenance jobs
-    job_queue = application.job_queue
-    if job_queue:
+    try:
         job_queue.run_repeating(
             keep_alive,
             interval=600,
@@ -639,22 +644,28 @@ if __name__ == "__main__":
             interval=300,
             first=5
         )
-    else:
-        logger.warning("JobQueue not available - periodic tasks disabled")
+        logger.info("JobQueue berhasil diinisialisasi")
+    except Exception as e:
+        logger.error(f"Gagal setup JobQueue: {e}")
 
-    # 2. Delete old webhook
-    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
-
-    # 3. Setup new webhook
-    setup_webhook()
-
-    # 4. Run application
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
-        secret_token='WEBHOOK_SECRET_TOKEN'
-    )
+    # 2. Setup webhook
+    try:
+        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+        setup_webhook()
+        
+        # 3. Run application
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+            secret_token='WEBHOOK_SECRET_TOKEN',
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+    except Exception as e:
+        logger.error(f"Error saat menjalankan bot: {e}")
+        # Fallback ke polling jika webhook gagal
+        application.run_polling()
 
 
 

@@ -607,8 +607,23 @@ async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===== MAIN EXECUTION =====
 # ===== MAIN EXECUTION =====
+# ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(application.run_polling())
+    import os
+    PORT = int(os.environ.get("PORT", 5000))
+    WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://cdrama-bot.onrender.com")
+
+    # Hapus webhook lama
+    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook")
+
+    # Set webhook baru langsung
+    application.run_webhook(
+        listen="0.0.0.0",              # Agar bisa diakses dari luar
+        port=PORT,                     # Port sesuai Render
+        url_path=BOT_TOKEN,            # Path webhook (wajib token)
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+    )
+
+
 
 

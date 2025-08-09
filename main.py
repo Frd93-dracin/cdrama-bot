@@ -613,47 +613,65 @@ def setup_webhook():
         webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
+        # 1. Hapus webhook lama dulu
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook",
+            timeout=5
+        )
+
+        # 2. Set webhook baru (dengan lebih banyak parameter)
         response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
                 'url': webhook_url,
                 'drop_pending_updates': True,
-                'secret_token': 'WEBHOOK_SECRET_TOKEN'
+                'secret_token': os.getenv('WEBHOOK_SECRET', 'WEBHOOK_SECRET_TOKEN'),
+                'allowed_updates': ['message', 'callback_query'],
+                'max_connections': 40
             },
             timeout=10
         )
+        
         result = response.json()
         logger.info(f"Webhook setup result: {result}")
-        return result
+
+        # 3. Verifikasi
+        verify = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo"
+        ).json()
+        logger.info(f"ℹ️ Current webhook info: {verify}")
+
+        return {
+            'set_result': result,
+            'current_webhook': verify
+        }
     except Exception as e:
         logger.error(f"🔥 Failed to set webhook: {str(e)}")
-        return {"error": str(e)}
-        
+        return {
+            'error': str(e),
+            'details': 'Check WEBHOOK_URL and BOT_TOKEN'
+        }
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    # Setup webhook di Render.com
-    if os.getenv('RENDER'):
-        # Setup Flask server untuk webhook
-        from flask import Flask, request
-        app = Flask(__name__)
+    import uvicorn
+    from asyncio import run
+    
+    async def main():
+        # Setup webhook
+        await setup_webhook()
         
-        @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-        async def webhook():
-            json_str = await request.get_json()
-            update = Update.de_json(json_str, application.bot)
-            await application.process_update(update)
-            return 'ok', 200
-            
-        @app.route('/healthz', methods=['GET'])
-        def health_check():
-            return 'OK', 200
-            
-        # Jalankan server Flask
-        port = int(os.environ.get('PORT', 8443))
-        app.run(host='0.0.0.0', port=port)
-    else:
-        # Mode polling untuk development lokal
-        application.run_polling(drop_pending_updates=True)
+        # Jalankan server FastAPI
+        config = uvicorn.Config(
+            app,
+            host="0.0.0.0",
+            port=int(os.getenv("PORT", 8443)),
+            log_level="info"
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+    
+    run(main())
+
 
 
 

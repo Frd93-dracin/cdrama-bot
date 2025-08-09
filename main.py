@@ -6,7 +6,8 @@ import time
 import base64
 import sys
 import requests
-from fastapi import Request
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 print("Python version:", sys.version)
 
@@ -28,17 +29,16 @@ from telegram.ext import (
 )
 from oauth2client.service_account import ServiceAccountCredentials
 
-import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 session = requests.Session()
-retry = Retry(
+retry = requests.adapters.Retry(
     total=3,
     backoff_factor=1,
     status_forcelist=[500, 502, 503, 504]
 )
-adapter = HTTPAdapter(max_retries=retry)
+adapter = requests.adapters.HTTPAdapter(max_retries=retry)
 session.mount('http://', adapter)
 session.mount('https://', adapter)
 
@@ -64,6 +64,9 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI()
 
 # Inisialisasi Google Sheets
 try:
@@ -595,11 +598,10 @@ application.add_handler(CommandHandler("generate_link", generate_film_links))
 application.add_handler(CallbackQueryHandler(button_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-app = FastAPI()
-
+# ===== WEBHOOK ENDPOINTS =====
 @app.post(f'/{BOT_TOKEN}')
 async def telegram_webhook(request: Request):
-    """Endpoint untuk menerima update dari Telegram"""
+    """Endpoint to receive updates from Telegram"""
     try:
         json_data = await request.json()
         update = Update.de_json(json_data, application.bot)
@@ -607,27 +609,31 @@ async def telegram_webhook(request: Request):
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error processing update: {e}")
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": "error", "message": str(e)}
+        )
+
 
 @app.get("/healthz")
 async def health_check():
-    """Endpoint health check untuk Render"""
+    """Health check endpoint for Render"""
     return {"status": "ok", "uptime": str(datetime.now() - start_time)}
 
 def setup_webhook():
-    """Setup webhook (synchronous)"""
+    """Setup Telegram webhook (synchronous)"""
     try:
         webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
-        # 1. Hapus webhook lama
-        requests.post(
+        # 1. Delete old webhook
+        session.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook",
             timeout=5
         )
 
-        # 2. Set webhook baru
-        response = requests.post(
+        # 2. Set new webhook
+        response = session.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
                 'url': webhook_url,
@@ -642,8 +648,8 @@ def setup_webhook():
         result = response.json()
         logger.info(f"Webhook setup result: {result}")
 
-        # 3. Verifikasi
-        verify = requests.get(
+        # 3. Verify
+        verify = session.get(
             f"https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo"
         ).json()
         logger.info(f"ℹ️ Current webhook info: {verify}")
@@ -669,6 +675,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

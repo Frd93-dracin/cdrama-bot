@@ -32,6 +32,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+# Setup logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI()
+
 session = requests.Session()
 retry = requests.adapters.Retry(
     total=3,
@@ -57,16 +67,6 @@ TRAKTEER_PACKAGE_MAPPING = {
     "vip30hari": {"days": 30, "price": 30000},
     "vip5bulan": {"days": 180, "price": 150000}
 }
-
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
-app = FastAPI()
 
 # Inisialisasi Google Sheets
 try:
@@ -577,7 +577,19 @@ async def ping_server(context: CallbackContext):
     except Exception as e:
         logger.warning(f"Ping failed: {str(e)}")
         # Tidak perlu refresh webhook otomatis
-        
+
+async def bot_health_check(update: Update, context: CallbackContext):
+    """Handler for /health command"""
+    try:
+        await update.message.reply_text(
+            "✅ Bot is running!\n"
+            f"Python version: {sys.version.split()[0]}\n"
+            f"Uptime: {datetime.now() - start_time}"
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        await update.message.reply_text("⚠️ Bot is running but with some issues")
+
 # ===== TELEGRAM BOT SETUP =====
 application = Application.builder().token(BOT_TOKEN).build()
 
@@ -589,7 +601,7 @@ if job_queue is None:
 
 # Register handlers
 application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("health", health_check))
+application.add_handler(CommandHandler("health", bot_health_check))
 application.add_handler(CommandHandler("vip", vip))
 application.add_handler(CommandHandler("status", status))
 application.add_handler(CommandHandler("gratis", gratis))
@@ -675,6 +687,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

@@ -92,7 +92,7 @@ VIP_PACKAGES = [
 
 # ===== FUNGSI BANTUAN =====
 def refresh_connection():
-    """Refresh koneksi Google Sheets"""
+    """Refresh koneksi Google Sheets dengan timeout"""
     try:
         global client, sheet_members, sheet_films
         client = gspread.authorize(creds)
@@ -103,6 +103,7 @@ def refresh_connection():
         return True
     except Exception as e:
         logger.error(f"Gagal refresh koneksi: {e}")
+        time.sleep(5)  # Tunggu sebelum retry
         return False
 
 def safe_sheets_operation(func, max_retries=3):
@@ -630,10 +631,30 @@ def setup_webhook():
         
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
-    application.run_polling(
-        drop_pending_updates=True,
-        close_loop=False  # Biarkan Render.com mengatur lifecycle
-    )
+    # Setup webhook di Render.com
+    if os.getenv('RENDER'):
+        # Setup Flask server untuk webhook
+        from flask import Flask, request
+        app = Flask(__name__)
+        
+        @app.route(f'/{BOT_TOKEN}', methods=['POST'])
+        async def webhook():
+            json_str = await request.get_json()
+            update = Update.de_json(json_str, application.bot)
+            await application.process_update(update)
+            return 'ok', 200
+            
+        @app.route('/healthz', methods=['GET'])
+        def health_check():
+            return 'OK', 200
+            
+        # Jalankan server Flask
+        port = int(os.environ.get('PORT', 8443))
+        app.run(host='0.0.0.0', port=port)
+    else:
+        # Mode polling untuk development lokal
+        application.run_polling(drop_pending_updates=True)
+
 
 
 

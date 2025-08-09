@@ -6,8 +6,9 @@ import time
 import base64
 import sys
 import requests
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi import status as fastapi_status
 
 print("Python version:", sys.version)
 
@@ -589,9 +590,11 @@ async def bot_health_check(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"Health check error: {e}")
         await update.message.reply_text("⚠️ Bot is running but with some issues")
-
+        
 # ===== TELEGRAM BOT SETUP =====
-application = Application.builder().token(BOT_TOKEN).build()
+def initialize_bot():
+    """Initialize the Telegram bot application"""
+    application = Application.builder().token(BOT_TOKEN).build()
 
 # Inisialisasi JobQueue secara terpisah
 job_queue = application.job_queue
@@ -610,11 +613,20 @@ application.add_handler(CommandHandler("generate_link", generate_film_links))
 application.add_handler(CallbackQueryHandler(button_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+return application
+
+# Initialize the bot application
+application = initialize_bot()
+
 # ===== WEBHOOK ENDPOINTS =====
 @app.post(f'/{BOT_TOKEN}')
 async def telegram_webhook(request: Request):
     """Endpoint to receive updates from Telegram"""
     try:
+        # Initialize the bot if not already initialized
+        if not application.initialized:
+            await application.initialize()
+            await application.start()
         json_data = await request.json()
         update = Update.de_json(json_data, application.bot)
         await application.process_update(update)
@@ -687,6 +699,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

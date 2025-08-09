@@ -550,19 +550,6 @@ def get_film_info(film_code):
         return None
     return safe_sheets_operation(operation)
 
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk command /health"""
-    try:
-        await update.message.reply_text(
-            "✅ Bot is running!\n"
-            f"Python version: {sys.version.split()[0]}\n"
-            f"Uptime: {datetime.now() - start_time}"
-        )
-    except Exception as e:
-        logging.error(f"Health check error: {e}")
-        await update.message.reply_text("⚠️ Bot is running but with some issues")
-
-
 def encode_film_code(film_code, part):
     """Encode kode film untuk URL"""
     return base64.urlsafe_b64encode(f"{film_code}_{part}".encode()).decode()
@@ -608,18 +595,38 @@ application.add_handler(CommandHandler("generate_link", generate_film_links))
 application.add_handler(CallbackQueryHandler(button_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+app = FastAPI()
+
+@app.post(f'/{BOT_TOKEN}')
+async def telegram_webhook(request: Request):
+    """Endpoint untuk menerima update dari Telegram"""
+    try:
+        json_data = await request.json()
+        update = Update.de_json(json_data, application.bot)
+        await application.process_update(update)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Error processing update: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/healthz")
+async def health_check():
+    """Endpoint health check untuk Render"""
+    return {"status": "ok", "uptime": str(datetime.now() - start_time)}
+
 def setup_webhook():
+    """Setup webhook (synchronous)"""
     try:
         webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
         logger.info(f"🔧 Setting webhook to: {webhook_url}")
 
-        # 1. Hapus webhook lama dulu
+        # 1. Hapus webhook lama
         requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook",
             timeout=5
         )
 
-        # 2. Set webhook baru (dengan lebih banyak parameter)
+        # 2. Set webhook baru
         response = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
             json={
@@ -641,36 +648,27 @@ def setup_webhook():
         ).json()
         logger.info(f"ℹ️ Current webhook info: {verify}")
 
-        return {
-            'set_result': result,
-            'current_webhook': verify
-        }
+        return True
     except Exception as e:
         logger.error(f"🔥 Failed to set webhook: {str(e)}")
-        return {
-            'error': str(e),
-            'details': 'Check WEBHOOK_URL and BOT_TOKEN'
-        }
+        return False
+
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     import uvicorn
-    from asyncio import run
     
-    async def main():
-        # Setup webhook
-        await setup_webhook()
-        
-        # Jalankan server FastAPI
-        config = uvicorn.Config(
-            app,
-            host="0.0.0.0",
-            port=int(os.getenv("PORT", 8443)),
-            log_level="info"
-        )
-        server = uvicorn.Server(config)
-        await server.serve()
+    # Setup webhook (sync)
+    if not setup_webhook():
+        logger.error("Gagal setup webhook, keluar...")
+        exit(1)
     
-    run(main())
+    # Jalankan server
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8443)),
+        log_level="info"
+    )
 
 
 

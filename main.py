@@ -325,8 +325,8 @@ async def vip(update: Update, context: CallbackContext):
                  "Cara jadi member VIP:\n"
                  f"1. Copy email ini : `{user_id}@vipbot.com`\n\n"
                  "2. Pilih paket VIP di bawah\n"
-                 "3. Paste email pada kolom email
-                 "4. Pilih metode pembayaran yang anda mau
+                 "3. Paste email pada kolom email\n"
+                 "4. Pilih metode pembayaran yang anda mau\n"
                  "Status VIP akan aktif otomatis dalam 1 menit setelah pembayaran.",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
@@ -700,6 +700,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

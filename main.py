@@ -624,9 +624,16 @@ async def telegram_webhook(request: Request):
     """Endpoint to receive updates from Telegram"""
     try:
         # Initialize the bot if not already initialized
-        if not application.initialized:
+        if not application.running:
             await application.initialize()
             await application.start()
+            await application.updater.start_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                url_path=BOT_TOKEN,
+                webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+            )
+        
         json_data = await request.json()
         update = Update.de_json(json_data, application.bot)
         await application.process_update(update)
@@ -634,10 +641,9 @@ async def telegram_webhook(request: Request):
     except Exception as e:
         logger.error(f"Error processing update: {e}")
         return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=fastapi_status.HTTP_400_BAD_REQUEST,
             content={"status": "error", "message": str(e)}
         )
-
 
 @app.get("/healthz")
 async def health_check():
@@ -699,6 +705,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

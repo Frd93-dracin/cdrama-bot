@@ -595,25 +595,25 @@ async def bot_health_check(update: Update, context: CallbackContext):
 def initialize_bot():
     """Initialize the Telegram bot application"""
     application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Initialize JobQueue
+    job_queue = application.job_queue
+    if job_queue is None:
+        job_queue = JobQueue()
+        application.job_queue = job_queue
 
-# Inisialisasi JobQueue secara terpisah
-job_queue = application.job_queue
-if job_queue is None:
-    job_queue = JobQueue()
-    application.job_queue = job_queue
-
-# Register handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("health", bot_health_check))
-application.add_handler(CommandHandler("vip", vip))
-application.add_handler(CommandHandler("status", status))
-application.add_handler(CommandHandler("gratis", gratis))
-application.add_handler(CommandHandler("vip_episode", vip_episode))
-application.add_handler(CommandHandler("generate_link", generate_film_links))
-application.add_handler(CallbackQueryHandler(button_handler))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-return application
+    # Register handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("health", bot_health_check))
+    application.add_handler(CommandHandler("vip", vip))
+    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("gratis", gratis))
+    application.add_handler(CommandHandler("vip_episode", vip_episode))
+    application.add_handler(CommandHandler("generate_link", generate_film_links))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    return application  # This should be INSIDE the function
 
 # Initialize the bot application
 application = initialize_bot()
@@ -687,18 +687,19 @@ def setup_webhook():
 if __name__ == "__main__":
     import uvicorn
     
-    # Setup webhook (sync)
+    # Setup webhook
     if not setup_webhook():
-        logger.error("Gagal setup webhook, keluar...")
+        logger.error("Failed to setup webhook, exiting...")
         exit(1)
     
-    # Jalankan server
+    # Run the server
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

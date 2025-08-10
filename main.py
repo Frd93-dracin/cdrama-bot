@@ -6,7 +6,7 @@ import time
 import base64
 import sys
 import requests
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi import status as fastapi_status
 
@@ -627,12 +627,6 @@ async def telegram_webhook(request: Request):
         if not application.running:
             await application.initialize()
             await application.start()
-            await application.updater.start_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                url_path=BOT_TOKEN,
-                webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
-            )
         
         json_data = await request.json()
         update = Update.de_json(json_data, application.bot)
@@ -640,9 +634,9 @@ async def telegram_webhook(request: Request):
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error processing update: {e}")
-        return JSONResponse(
+        raise HTTPException(
             status_code=fastapi_status.HTTP_400_BAD_REQUEST,
-            content={"status": "error", "message": str(e)}
+            detail={"status": "error", "message": str(e)}
         )
 
 @app.get("/healthz")
@@ -700,11 +694,12 @@ if __name__ == "__main__":
     
     # Jalankan server
     uvicorn.run(
-        app,
+        "main:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

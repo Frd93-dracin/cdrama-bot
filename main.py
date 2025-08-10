@@ -684,6 +684,56 @@ def setup_webhook():
         logger.error(f"🔥 Failed to set webhook: {str(e)}")
         return False
 
+# ===== TRAKTEER WEBHOOK HANDLER =====
+@app.post("/trakteer_webhook")
+async def handle_trakteer_webhook(request: Request):
+    """Endpoint untuk menerima notifikasi pembayaran dari Trakteer"""
+    try:
+        # 1. Verifikasi secret token
+        incoming_secret = request.headers.get("X-Trakteer-Webhook-Secret")
+        if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
+            logger.error(f"Invalid webhook secret. Received: {incoming_secret}")
+            raise HTTPException(status_code=403, detail="Invalid secret token")
+
+        # 2. Parse JSON data
+        data = await request.json()
+        logger.info(f"Received Trakteer webhook: {data}")
+
+        # 3. Proses hanya jika pembayaran sukses
+        if data.get("status", "").lower() != "paid":
+            return JSONResponse({"status": "ignored"})
+
+        # 4. Ekstrak user_id dari email (format: user_id@vipbot.com)
+        email = data.get("customer_email", "")
+        if not email.endswith("@vipbot.com"):
+            logger.error(f"Invalid email format: {email}")
+            return JSONResponse({"status": "error", "message": "Invalid email format"})
+
+        user_id = email.split("@")[0]
+        package_id = data.get("package_id")
+
+        # 5. Update status VIP (dalam background task)
+        asyncio.create_task(
+            process_vip_payment(user_id, package_id)
+        )
+
+        return JSONResponse({"status": "success"})
+
+    except Exception as e:
+        logger.error(f"Webhook processing failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+async def process_vip_payment(user_id: str, package_id: str):
+    """Background task untuk update VIP status"""
+    try:
+        success = update_vip_status(user_id, package_id)
+        if success:
+            logger.info(f"VIP status updated for user {user_id}")
+        else:
+            logger.error(f"Failed to update VIP status for user {user_id}")
+    except Exception as e:
+        logger.error(f"Background task error: {str(e)}")
+
 # ===== MAIN EXECUTION =====
 if __name__ == "__main__":
     import uvicorn
@@ -700,6 +750,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

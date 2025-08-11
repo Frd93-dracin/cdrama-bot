@@ -60,7 +60,7 @@ BOT_USERNAME = "VIPDramaCinaBot"  # Pastikan sama dengan username bot
 CHANNEL_PRIVATE = "-1002683110383"  # Gunakan ID channel numerik
 PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com")
-TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "trhook-KoDBsnzkVjNF5gCQh4xDwcdN")
+TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "trhook-9WUnIQtx4Sz0lsmKtpb6CP0v")
 TRAKTEER_PACKAGE_MAPPING = {
     "vip1hari": {"days": 1, "price": 2000},
     "vip3hari": {"days": 3, "price": 5000},
@@ -686,41 +686,30 @@ def setup_webhook():
 
 # ===== TRAKTEER WEBHOOK HANDLER =====
 @app.post("/trakteer_webhook")
-async def handle_trakteer_webhook(request: Request):
-    """Endpoint untuk menerima notifikasi pembayaran dari Trakteer"""
-    try:
-        # 1. Verifikasi secret token
-        incoming_secret = request.headers.get("X-Trakteer-Webhook-Secret")
-        if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
-            logger.error(f"Invalid webhook secret. Received: {incoming_secret}")
-            raise HTTPException(status_code=403, detail="Invalid secret token")
-
-        # 2. Parse JSON data
-        data = await request.json()
-        logger.info(f"Received Trakteer webhook: {data}")
-
-        # 3. Proses hanya jika pembayaran sukses
-        if data.get("status", "").lower() != "paid":
-            return JSONResponse({"status": "ignored"})
-
-        # 4. Ekstrak user_id dari email (format: user_id@vipbot.com)
-        email = data.get("customer_email", "")
-        if not email.endswith("@vipbot.com"):
-            logger.error(f"Invalid email format: {email}")
-            return JSONResponse({"status": "error", "message": "Invalid email format"})
-
-        user_id = email.split("@")[0]
-        package_id = data.get("package_id")
-
-        # 5. Update status VIP (dalam background task)
-        asyncio.create_task(
-            process_vip_payment(user_id, package_id)
+async def trakteer_webhook(request: Request):
+    # 1. Ambil header dengan case-insensitive
+    incoming_secret = request.headers.get("x-trakteer-webhook-secret") or \
+                     request.headers.get("X-Trakteer-Webhook-Secret")
+    
+    # 2. Debugging: Log semua headers
+    logger.info(f"Received headers: {dict(request.headers)}")
+    
+    # 3. Validasi secret
+    if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
+        logger.error(f"Invalid secret. Expected: {TRAKTEER_WEBHOOK_SECRET}, Got: {incoming_secret}")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid secret token",
+            headers={"X-Debug-Received-Secret": str(incoming_secret)}  # Untuk debugging
         )
-
-        return JSONResponse({"status": "success"})
-
+    
+    # 4. Proses data
+    try:
+        data = await request.json()
+        logger.info(f"Webhook data: {data}")
+        return {"status": "success"}
     except Exception as e:
-        logger.error(f"Webhook processing failed: {str(e)}")
+        logger.error(f"Error processing webhook: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 async def process_vip_payment(user_id: str, package_id: str):
@@ -750,6 +739,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

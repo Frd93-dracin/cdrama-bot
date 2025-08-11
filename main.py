@@ -687,30 +687,19 @@ def setup_webhook():
 # ===== TRAKTEER WEBHOOK HANDLER =====
 @app.post("/trakteer_webhook")
 async def trakteer_webhook(request: Request):
-    # 1. Ambil header dengan case-insensitive
-    incoming_secret = request.headers.get("x-trakteer-webhook-secret") or \
-                     request.headers.get("X-Trakteer-Webhook-Secret")
+    # 1. Ambil token dari header yang benar (Trakteer mengirim 'X-Webhook-Token')
+    incoming_secret = request.headers.get("X-Webhook-Token")  # Perhatikan nama header ini!
     
-    # 2. Debugging: Log semua headers
-    logger.info(f"Received headers: {dict(request.headers)}")
-    
-    # 3. Validasi secret
-    if incoming_secret != TRAKTEER_WEBHOOK_SECRET:
-        logger.error(f"Invalid secret. Expected: {TRAKTEER_WEBHOOK_SECRET}, Got: {incoming_secret}")
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid secret token",
-            headers={"X-Debug-Received-Secret": str(incoming_secret)}  # Untuk debugging
-        )
-    
-    # 4. Proses data
-    try:
-        data = await request.json()
-        logger.info(f"Webhook data: {data}")
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error processing webhook: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    # 2. Bandingkan dengan secret yang diharapkan
+    correct_secret = os.getenv("TRAKTEER_WEBHOOK_SECRET")
+    if incoming_secret != correct_secret:
+        logger.error(f"Token mismatch! Expected: '{correct_secret}', Received: '{incoming_secret}'")
+        raise HTTPException(status_code=403, detail="Invalid secret token")
+
+    # 3. Lanjutkan proses jika token valid
+    data = await request.json()
+    logger.info(f"Webhook data: {data}")
+    return {"status": "success"}
 
 async def process_vip_payment(user_id: str, package_id: str):
     """Background task untuk update VIP status"""
@@ -739,6 +728,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

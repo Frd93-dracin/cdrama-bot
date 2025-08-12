@@ -688,42 +688,47 @@ def setup_webhook():
 # ===== TRAKTEER WEBHOOK HANDLER =====
 @app.post("/trakteer_webhook")
 async def trakteer_webhook(request: Request):
-    # 1. Ambil token dari header yang benar (Trakteer mengirim 'X-Webhook-Token')
-    incoming_secret = request.headers.get("X-Webhook-Token")  # Perhatikan nama header ini!
-    
-    # 2. Bandingkan dengan secret yang diharapkan
-    correct_secret = os.getenv("TRAKTEER_WEBHOOK_SECRET")
-    if incoming_secret != correct_secret:
-        logger.error(f"Token mismatch! Expected: '{correct_secret}', Received: '{incoming_secret}'")
-        raise HTTPException(status_code=403, detail="Invalid secret token")
-
-    # 3. Lanjutkan proses jika token valid
-    data = await request.json()
-    logger.info(f"Webhook data: {data}")
-    return {"status": "success"}
-
-    email = data.get("customer_email", "")
-    if not email.endswith("@vipbot.com"):
-        logger.error(f"Format email invalid: {email}")
-        return JSONResponse({"status": "error", "message": "Invalid email format"})
+    try:
+        # 1. Ambil token dari header
+        incoming_secret = request.headers.get("X-Webhook-Token")
+        correct_secret = os.getenv("TRAKTEER_WEBHOOK_SECRET")
         
-    user_id = email.split("@")[0]  # Contoh: "5579322856" dari "5579322856@vipbot.com"
-    package_id = data.get("package_id")  # Contoh: "vip1hari"
+        if incoming_secret != correct_secret:
+            logger.error(f"Token mismatch! Expected: '{correct_secret}', Got: '{incoming_secret}'")
+            raise HTTPException(status_code=403, detail="Invalid secret token")
 
-    # 4. Proses hanya jika status pembayaran "paid"
-    if data.get("status", "").lower() != "paid":
-        return JSONResponse({"status": "ignored", "message": "Payment not completed"})
+        # 2. Parse data
+        data = await request.json()
+        logger.info(f"Webhook data: {data}")
 
-    # 5. Update status VIP (jalankan di background task)
-    asyncio.create_task(
-        process_vip_payment(user_id, package_id)
-    )
+        # 3. Validasi email
+        email = data.get("customer_email", "")
+        if not email.endswith("@vipbot.com"):
+            logger.error(f"Invalid email format: {email}")
+            return JSONResponse({"status": "error", "message": "Invalid email format"})
+        
+        user_id = email.split("@")[0]
+        package_id = data.get("package_id")
 
-    return JSONResponse({"status": "success"})
-    
-except Exception as e:
-    logger.error(f"Webhook error: {str(e)}")
-    raise HTTPException(status_code=400, detail=str(e))
+        # 4. Proses hanya jika status paid
+        if data.get("status", "").lower() != "paid":
+            return JSONResponse({"status": "ignored", "message": "Payment not completed"})
+
+        # 5. Update VIP status
+        success = update_vip_status(user_id, package_id)
+        if success:
+            logger.info(f"Updated user {user_id} to VIP")
+            return JSONResponse({"status": "success"})
+        else:
+            logger.error(f"Failed to update VIP status for user {user_id}")
+            return JSONResponse({"status": "error", "message": "Failed to update status"})
+
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received")
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except Exception as e:
+        logger.error(f"Webhook error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 async def process_vip_payment(user_id: str, package_id: str):
     """Background task untuk update VIP status"""
@@ -752,6 +757,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

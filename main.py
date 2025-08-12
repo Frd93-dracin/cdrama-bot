@@ -198,21 +198,36 @@ def check_vip_status(user_id):
     return safe_sheets_operation(operation)
 
 def update_vip_status(user_id, package_id):
-    """Update status VIP user di Google Sheets berdasarkan paket"""
+    """Update status VIP user di Google Sheets"""
     def operation():
-        row = get_user_row(user_id)
-        if not row:
+        try:
+            # Dapatkan package info
+            package = TRAKTEER_PACKAGE_MAPPING.get(package_id)
+            if not package:
+                logger.error(f"Package {package_id} not found!")
+                return False
+
+            # Cari user
+            records = sheet_members.get_all_records()
+            for idx, record in enumerate(records, start=2):
+                if str(record.get('telegram_id', '')) == str(user_id):
+                    # Hitung expiry date
+                    expiry_date = (datetime.now() + timedelta(days=package['days'])).strftime("%Y-%m-%d")
+                    
+                    # Update sheet
+                    sheet_members.update_cell(idx, 3, "vip")  # Kolom status
+                    sheet_members.update_cell(idx, 4, expiry_date)  # Kolom expiry
+                    
+                    logger.info(f"Updated user {user_id} to VIP until {expiry_date}")
+                    return True
+
+            logger.error(f"User {user_id} not found in sheet")
             return False
-            
-        package = TRAKTEER_PACKAGE_MAPPING.get(package_id)
-        if not package:
+
+        except Exception as e:
+            logger.error(f"Sheet update error: {str(e)}")
             return False
-            
-        expiry_date = (datetime.now() + timedelta(days=package['days'])).strftime("%Y-%m-%d")
-        sheet_members.update_cell(row, 3, "vip")
-        sheet_members.update_cell(row, 4, expiry_date)
-        logger.info(f"Updated user {user_id} to VIP until {expiry_date}")
-        return True
+
     return safe_sheets_operation(operation)
 
 # ===== HANDLER COMMAND =====
@@ -770,6 +785,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

@@ -689,46 +689,59 @@ def setup_webhook():
 @app.post("/trakteer_webhook")
 async def trakteer_webhook(request: Request):
     try:
-        # 1. Ambil token dari header
+        # Verifikasi secret token
         incoming_secret = request.headers.get("X-Webhook-Token")
-        correct_secret = os.getenv("TRAKTEER_WEBHOOK_SECRET")
-        
-        if incoming_secret != correct_secret:
-            logger.error(f"Token mismatch! Expected: '{correct_secret}', Got: '{incoming_secret}'")
-            raise HTTPException(status_code=403, detail="Invalid secret token")
+        if incoming_secret != os.getenv("TRAKTEER_WEBHOOK_SECRET"):
+            logger.error("Invalid webhook secret")
+            raise HTTPException(status_code=403)
 
-        # 2. Parse data
         data = await request.json()
-        logger.info(f"Webhook data: {data}")
+        logger.info(f"Raw webhook data: {json.dumps(data, indent=2)}")  # Log lengkap
 
-        # 3. Validasi email
-        email = data.get("customer_email", "")
-        if not email.endswith("@vipbot.com"):
-            logger.error(f"Invalid email format: {email}")
-            return JSONResponse({"status": "error", "message": "Invalid email format"})
+        # Cari user_id dari supporter_message (fallback jika email tidak ada)
+        supporter_message = data.get("supporter_message", "")
+        user_id = None
         
-        user_id = email.split("@")[0]
-        package_id = data.get("package_id")
+        # Method 1: Cari dari "?utm_source=USER_ID" di supporter_message
+        if "utm_source=" in supporter_message:
+            user_id = supporter_message.split("utm_source=")[1].split("&")[0].split("?")[0]
+        
+        # Method 2: Cari pola email di supporter_message
+        if not user_id and "@vipbot.com" in supporter_message:
+            user_id = supporter_message.split("@vipbot.com")[0][-10:]  # Ambil 10 digit terakhir
 
-        # 4. Proses hanya jika status paid
-        if data.get("status", "").lower() != "paid":
-            return JSONResponse({"status": "ignored", "message": "Payment not completed"})
+        if not user_id or not user_id.isdigit():
+            logger.error(f"Failed to extract user_id from: {supporter_message}")
+            return JSONResponse({"status": "error", "message": "User ID not found"})
 
-        # 5. Update VIP status
+        # Proses package
+        package_id = "vip1hari"  # Default, sesuaikan dengan quantity jika perlu
+        quantity = int(data.get("quantity", 0))
+        
+        if quantity == 2:
+            package_id = "vip1hari"
+        elif quantity == 5:
+            package_id = "vip3hari"
+        elif quantity == 10:
+            package_id = "vip7hari"
+        elif quantity == 30:
+            package_id = "vip30hari"
+        elif quantity == 150:
+            package_id = "vip6bulan"
+        # ... tambahkan mapping lainnya sesuai kebutuhan
+
+        # Update status VIP
         success = update_vip_status(user_id, package_id)
         if success:
-            logger.info(f"Updated user {user_id} to VIP")
+            logger.info(f"Successfully updated VIP status for user {user_id}")
             return JSONResponse({"status": "success"})
         else:
             logger.error(f"Failed to update VIP status for user {user_id}")
-            return JSONResponse({"status": "error", "message": "Failed to update status"})
+            return JSONResponse({"status": "error", "message": "Google Sheets update failed"})
 
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON received")
-        raise HTTPException(status_code=400, detail="Invalid JSON format")
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500)
 
 async def process_vip_payment(user_id: str, package_id: str):
     """Background task untuk update VIP status"""
@@ -757,6 +770,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

@@ -211,6 +211,7 @@ def update_vip_status(user_id, package_id):
         expiry_date = (datetime.now() + timedelta(days=package['days'])).strftime("%Y-%m-%d")
         sheet_members.update_cell(row, 3, "vip")
         sheet_members.update_cell(row, 4, expiry_date)
+        logger.info(f"Updated user {user_id} to VIP until {expiry_date}")
         return True
     return safe_sheets_operation(operation)
 
@@ -701,6 +702,29 @@ async def trakteer_webhook(request: Request):
     logger.info(f"Webhook data: {data}")
     return {"status": "success"}
 
+    email = data.get("customer_email", "")
+    if not email.endswith("@vipbot.com"):
+        logger.error(f"Format email invalid: {email}")
+        return JSONResponse({"status": "error", "message": "Invalid email format"})
+        
+    user_id = email.split("@")[0]  # Contoh: "5579322856" dari "5579322856@vipbot.com"
+    package_id = data.get("package_id")  # Contoh: "vip1hari"
+
+    # 4. Proses hanya jika status pembayaran "paid"
+    if data.get("status", "").lower() != "paid":
+        return JSONResponse({"status": "ignored", "message": "Payment not completed"})
+
+    # 5. Update status VIP (jalankan di background task)
+    asyncio.create_task(
+        process_vip_payment(user_id, package_id)
+    )
+
+    return JSONResponse({"status": "success"})
+    
+except Exception as e:
+    logger.error(f"Webhook error: {str(e)}")
+    raise HTTPException(status_code=400, detail=str(e))
+
 async def process_vip_payment(user_id: str, package_id: str):
     """Background task untuk update VIP status"""
     try:
@@ -728,6 +752,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

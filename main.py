@@ -171,27 +171,16 @@ def reduce_quota(row):
             sheet_members.update_cell(row, 6, current - 1)
     safe_sheets_operation(operation)
 
-def get_film_info(film_code):
-    """Mendapatkan data film lengkap termasuk ID pesan"""
+def get_film_link(film_code, is_vip=False):
+    """Mendapatkan link film berdasarkan kode"""
     def operation():
         records = sheet_films.get_all_records()
         for record in records:
-            # Debug: print structure
-            logger.info(f"Record: {record}")
-            
-            # Cari by code (case insensitive)
-            if str(record.get('code', '')).lower() == str(film_code).lower():
-                return {
-                    'title': record.get('title', ''),
-                    'free_msg_id': record.get('free_msg_id', record.get('free_msg_id', 0)),
-                    'vip_msg_id': record.get('vip_msg_id', record.get('vip_msg_id', 0)),
-                    'is_part2_vip': str(record.get('is_part2_vip', 'TRUE')).upper() == 'TRUE',
-                    'is_vip_only': int(record.get('free_msg_id', 0)) == 0
-                }
-        logger.warning(f"Film {film_code} not found in records")
+            if record.get('code') == film_code:
+                return record.get('vip_link' if is_vip else 'free_link')
         return None
     return safe_sheets_operation(operation)
- 
+
 def check_vip_status(user_id):
     """Memeriksa status VIP user"""
     def operation():
@@ -262,23 +251,13 @@ async def start(update: Update, context: CallbackContext):
                     return
 
                 if part == "P1":
-                    if film_data.get('is_vip_only', False):
-                        await update.message.reply_text(
-                            "🔒 Film ini khusus member VIP!\n\n"
-                            "Upgrade ke VIP untuk menonton:",
-                            reply_markup=InlineKeyboardMarkup([
-                                [InlineKeyboardButton("💎 Upgrade VIP", callback_data="vip")]
-                            ])
-                        )
-                        return
-        
                     try:
                         await context.bot.copy_message(
                             chat_id=update.effective_chat.id,
                             from_chat_id=int(CHANNEL_PRIVATE),
                             message_id=int(film_data['free_msg_id'])
                         )
-                                           
+                        
                         keyboard = [
                             [InlineKeyboardButton(
                                 "⏩ Lanjut Part 2" + (" (VIP)" if film_data['is_part2_vip'] else ""), 
@@ -806,26 +785,3 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

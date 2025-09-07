@@ -176,14 +176,19 @@ def get_film_info(film_code):
     def operation():
         records = sheet_films.get_all_records()
         for record in records:
-            if record['code'] == film_code:
+            # Debug: print structure
+            logger.info(f"Record: {record}")
+            
+            # Cari by code (case insensitive)
+            if str(record.get('code', '')).lower() == str(film_code).lower():
                 return {
-                    'title': record['title'],
-                    'free_msg_id': record['free_msg_id'],
-                    'vip_msg_id': record['vip_msg_id'],
-                    'is_part2_vip': record.get('is_part2_vip', 'TRUE') == 'TRUE',
-                    'is_vip_only': int(record.get('free_msg_id', 0)) == 0  # TAMBAH BARIS INI
+                    'title': record.get('title', ''),
+                    'free_msg_id': record.get('free_msg_id', record.get('free_msg_id', 0)),
+                    'vip_msg_id': record.get('vip_msg_id', record.get('vip_msg_id', 0)),
+                    'is_part2_vip': str(record.get('is_part2_vip', 'TRUE')).upper() == 'TRUE',
+                    'is_vip_only': int(record.get('free_msg_id', 0)) == 0
                 }
+        logger.warning(f"Film {film_code} not found in records")
         return None
     return safe_sheets_operation(operation)
  
@@ -801,6 +806,7 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
 
 
 

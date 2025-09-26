@@ -62,11 +62,11 @@ PORT = int(os.getenv('PORT', 8443))
 WEBHOOK_URL = os.getenv('WEBHOOK_URL', "https://cdrama-bot.onrender.com")
 TRAKTEER_WEBHOOK_SECRET = os.getenv('TRAKTEER_WEBHOOK_SECRET', "trhook-9WUnIQtx4Sz0lsmKtpb6CP0v")
 TRAKTEER_PACKAGE_MAPPING = {
-    "vip1hari": {"days": 1, "price": 2000},
-    "vip3hari": {"days": 3, "price": 5000},
-    "vip7hari": {"days": 7, "price": 10000},
-    "vip30hari": {"days": 30, "price": 30000},
-    "vip5bulan": {"days": 180, "price": 150000}
+    "vip1hari": {"days": 1, "price": 1000},
+    "vip3hari": {"days": 3, "price": 2000},
+    "vip7hari": {"days": 7, "price": 5000},
+    "vip30hari": {"days": 30, "price": 25000},
+    "vip5bulan": {"days": 180, "price": 145000}
 }
 
 # Inisialisasi Google Sheets
@@ -87,11 +87,11 @@ except Exception as e:
 
 # Daftar paket VIP
 VIP_PACKAGES = [
-    {"label": "⚡ 1 Hari - Rp2.000", "days": 1, "price": 2000, "url": "https://trakteer.id/vipdramacina/tip?quantity=2&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+hari"},
-    {"label": "🔥 3 Hari - Rp5.000", "days": 3, "price": 5000, "url": "https://trakteer.id/vipdramacina/tip?quantity=5&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+3+hari"},
-    {"label": "💎 7 Hari - Rp10.000", "days": 7, "price": 10000, "url": "https://trakteer.id/vipdramacina/tip?quantity=10&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+7+hari"},
-    {"label": "🌟 30 Hari - Rp30.000", "days": 30, "price": 30000, "url": "https://trakteer.id/vipdramacina/tip?quantity=30&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+bulan"},
-    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp150.000", "days": 180, "price": 150000, "url": "https://trakteer.id/vipdramacina/tip?quantity=150&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+6+bulan"}
+    {"label": "⚡ 1 Hari - Rp1.000", "days": 1, "price": 1000, "url": "https://trakteer.id/vipdramacina/tip?quantity=1&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+hari"},
+    {"label": "🔥 3 Hari - Rp2.000", "days": 3, "price": 2000, "url": "https://trakteer.id/vipdramacina/tip?quantity=2&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+3+hari"},
+    {"label": "💎 7 Hari - Rp5.000", "days": 7, "price": 5000, "url": "https://trakteer.id/vipdramacina/tip?quantity=5&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+7+hari"},
+    {"label": "🌟 30 Hari - Rp25.000", "days": 30, "price": 25000, "url": "https://trakteer.id/vipdramacina/tip?quantity=25&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+1+bulan"},
+    {"label": "👑 5 Bulan (FREE 1 BULAN) - Rp145.000", "days": 180, "price": 145000, "url": "https://trakteer.id/vipdramacina/tip?quantity=145&step=2&display_name=Nama+Kamu&supporter_message=Saya+beli+VIP+6+bulan"}
 ]
 
 # ===== FUNGSI BANTUAN =====
@@ -785,3 +785,4 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", 8443)),
         log_level="info"
     )
+
